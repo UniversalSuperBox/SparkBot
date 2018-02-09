@@ -1,0 +1,7 @@
+[Service]
+Environment="SPARK_ACCESS_TOKEN={SPARK_TOKEN}"
+Environment="WEBHOOK_URL={URL}"
+Environment="RECEIVER_PORT={PORT}"
+User={USER}
+ExecStart=/home/{USER}/sparkbotEnv/bin/python /home/{USER}/sparkbot/run.py
+WorkingDirectory=/home/{USER}/sparkbot/

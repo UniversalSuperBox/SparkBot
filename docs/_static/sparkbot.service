@@ -1,0 +1,16 @@
+[Unit]
+Description=Cisco Spark chatbot
+
+[Service]
+Environment="SPARK_ACCESS_TOKEN="
+Environment="WEBHOOK_URL="
+Environment="RECEIVER_PORT="
+Type=simple
+User=bot
+ExecStart=/home/bot/env/bin/python /home/bot/sparkbot/run.py
+WorkingDirectory=/home/bot/sparkbot/
+Restart=on-abort
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target
