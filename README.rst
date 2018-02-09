@@ -11,7 +11,7 @@ It provides a low barrier to entry:
    easy)
 #. Start ``run.py``
 
-For more information, see the documentation. If you're not able to build it, check ``doc/quickstart.rst``
+For more information, see `the documentation`_.
 
 Features
 --------
@@ -26,7 +26,7 @@ Build the documentation
 
 To build the documentation, cd into the ``doc`` folder and run the following::
 
-    ``pip install -r requirements-dev.txt``
+    pip install -r requirements-dev.txt
     make html
 
 If you are on Windows, use ``make.bat`` rather than ``make``.
@@ -53,3 +53,5 @@ License
 -------
 
 Sparkbot is copyright Dalton Durst, 2018. It is licensed under the Apache license, version 2.0. See the LICENSE file for more details.
+
+.. _the documentation: http://sparkbot.readthedocs.io/en/latest/
