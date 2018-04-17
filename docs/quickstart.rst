@@ -81,7 +81,7 @@ Auto-start with systemd
 
 You can set up the bot so that it runs when the computer boots up. To do that, we'll create and edit a systemd unit.
 
-First, create the file ``/etc/systemd/system/sparkbot.service`` with the following content, then run ``systemctl daemon-reload``:
+First, create the file ``/etc/systemd/system/sparkbot.service`` with the following content. Replace ``{USER}`` with the account you created to run the bot. Once finished, save and close the file then run ``systemctl daemon-reload``:
 
 .. literalinclude:: /_static/sparkbot.service
    :caption: /etc/systemd/system/sparkbot.service
@@ -91,7 +91,7 @@ Next, run ``systemctl edit sparkbot.service`` and enter the following, changing 
 .. literalinclude:: /_static/sparkbot.service.edit
    :caption: systemctl edit sparkbot.service
 
-Note that ``{USER}`` is the account which you used to clone the bot.
+The values should be the same as the ones you used when you followed `Run the bot`_ above.
 
 Once that's finished, run the following to enable the bot on startup::
 
