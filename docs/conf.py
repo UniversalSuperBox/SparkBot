@@ -48,7 +48,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'Sparkbot'
-copyright = '2018, Dalton Durst'
+copyright = '2018, Dalton Durst. Licensed under Creative Commons BY 4.0 (CC BY 4.0)'
 author = 'Dalton Durst'
 
 # The version info for the project you're documenting, acts as replacement for
