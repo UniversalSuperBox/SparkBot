@@ -1,6 +1,5 @@
 CiscoSparkAPI
 bottle
-requests
 pytest
 sphinx
 sphinx-rtd-theme
