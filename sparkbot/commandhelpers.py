@@ -75,7 +75,7 @@ def get_person_by_email(api, person_email):
     elif not match(email_regex, person_email):
         raise ValueError("Incorrect e-mail format")
 
-    people = list(api.list(email=person_email))
+    people = list(api.people.list(email=person_email))
     number_of_people = len(people)
 
     if number_of_people == 1:
@@ -100,7 +100,7 @@ def get_person_by_spark_id(api, person_id):
     if person_id and isinstance(person_id, str):
         # Get this user by ID
         try:
-            person = api.get(person_id)
+            person = api.people.get(person_id)
         except SparkApiError:
             raise ValueError("No person found for ID")
     else:
