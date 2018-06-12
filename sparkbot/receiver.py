@@ -38,7 +38,7 @@ def call_core():
     json_data = request.json
 
     if WEBHOOK_KEY:
-        
+
         try:
             # Get the HMAC of the incoming message
             expected_digest = request.headers["x-spark-signature"]

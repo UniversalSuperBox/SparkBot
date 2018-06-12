@@ -8,22 +8,27 @@ Get a token from Spark
 
 Head over to Cisco Spark for Developer's `My Apps portal`_ and click the Add button to create a new bot. Go through the steps to create a bot. Once you're finished, copy the Bot's Access Token somewhere safe. We'll need it later in this process.
 
-Install required packages
--------------------------
+Dependencies
+------------
 
-First you'll need to install the prerequisites for running SparkBot with these instructions.
+First you'll need to install the prerequisites for running SparkBot.
+
+SparkBot requires the following software:
+
+* Python 3.5 or higher
+* Reverse proxy, such as nginx, for its webhook receiver
 
 Ubuntu 16.04
 ^^^^^^^^^^^^
 
-.. code-block:: shell
+To install the prerequisites on Ubuntu 16.04::
 
     sudo apt install python3 python3-virtualenv nginx
 
 Clone the source
 ----------------
 
-Clone the bot's source to the home directory of the user you will be running it as. I recommend creating a service account for your bot then using that.
+Clone the bot's source to the home directory of the user you will be running it as. I recommend creating a service account and using it to run the bot.
 
 From here on, we'll assume that the bot's source code is located in ``~/sparkbot``.
 
@@ -37,7 +42,7 @@ Copy run.py.example
 Set up a virtualenv
 -------------------
 
-Create and activate a Python(3.4+) virtualenv for the bot::
+Create and activate a Python(3.5+) virtualenv for the bot::
 
     python3 -m virtualenv ~/sparkbotEnv
     source ~/sparkbotEnv/bin/activate

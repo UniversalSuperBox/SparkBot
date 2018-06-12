@@ -39,10 +39,11 @@ Contribute
 To develop on sparkbot, you can do the following::
 
     pip install -r requirements-dev.txt
+    pip install -e .
 
-When you're ready to commit, run the bot's tests first::
+When you're ready to commit, run the bot's tests first. You will need a copy of `nodejs`_ installed, then run the following::
 
-    PYTHONPATH=. pytest
+    pytest
 
 Support
 -------
@@ -55,3 +56,4 @@ License
 Sparkbot is copyright Dalton Durst, 2018. It is licensed under the Apache license, version 2.0. See the LICENSE file for more details.
 
 .. _the documentation: http://sparkbot.readthedocs.io/en/latest/
+.. _nodejs: https://nodejs.org/en/download/

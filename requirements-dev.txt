@@ -3,3 +3,4 @@ bottle
 pytest
 sphinx
 sphinx-rtd-theme
+requests

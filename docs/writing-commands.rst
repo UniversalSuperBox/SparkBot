@@ -125,7 +125,7 @@ If a command will be running for a very long time, you may want to notify the us
    :emphasize-lines: 9
 
     @MY_BOT.command("ping")
-    def ping_callback(callback, room_id):
+    def ping_callback(callback):
         """
         Usage: `ping`
 

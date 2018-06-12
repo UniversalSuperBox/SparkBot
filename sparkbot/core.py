@@ -14,15 +14,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .exceptions import CommandNotFound
 import shlex
 import textwrap
 import functools
+from types import FunctionType
 from logging import Logger
 from inspect import signature
 from ciscosparkapi import CiscoSparkAPI, Webhook, Room
 
 class SparkBot:
-    """ A bot for Cisco Spark
+    """ A bot for Cisco Webex Teams
+
+    SparkBot has a ``help`` and ``help-all`` command built in by default. These may be overridden
+    using :func:`command` decorator and providing the "help" or "help-all" arguments and a function
+    with your desired behavior on calling ``help``. See :doc:`Writing Commands </writing-commands>`
+    for more information on writing commands.
 
     :param spark_api: CiscoSparkAPI instance that this bot should use
     :type spark_api: ciscosparkapi.CiscoSparkAPI
@@ -39,10 +46,12 @@ class SparkBot:
             raise TypeError("spark_api is not of type ciscosparkapi.CiscoSparkAPI")
 
         if isinstance(logger, Logger):
-            self.__logger__ = logger
+            self._logger = logger
         elif logger:
             # There is a value for logger, but it isn't a Logger
             raise TypeError("logger is not of type logging.Logger")
+        else:
+            self._logger = None
 
         self.commands = {}
         self.commands["help"] = Command(self.my_help)
@@ -60,6 +69,11 @@ class SparkBot:
                                 names.
         """
 
+        if not command_strings:
+            raise TypeError("command_strings not given in call to SparkBot.command. At least one command name is required in your decorator.")
+        elif isinstance(command_strings, FunctionType):
+            raise TypeError("command_strings not given in call to SparkBot.command. Did you include the parentheses in your decorator?")
+
         def decorator(function):
             if isinstance(command_strings, str):
                 names_to_register = [command_strings]
@@ -73,7 +87,7 @@ class SparkBot:
             # Register new command object under each of its names
             for command in names_to_register:
                 if not isinstance(command, str):
-                    raise TypeError("command_strings is not a str or list of str.")
+                    raise TypeError("non-str object found in command_strings.")
 
                 self.commands[command] = new_command
 
@@ -82,10 +96,9 @@ class SparkBot:
         return decorator
 
     def commandworker(self, json_data):
-        """Called by the Flask app when a command comes in. Glues together the behavior of bc3cb.
+        """Called by the bottle app when a command comes in. Glues together the behavior of SparkBot.
 
-        :param json_data: The blob of json that Spark POSTs to the webapp, parsed into a
-                          dictionary
+        :param json_data: The blob of json that Spark POSTs to the webhook parsed into a dictionary
         """
 
         webhook_obj = Webhook(json_data)
@@ -98,8 +111,8 @@ class SparkBot:
             commandline = shlex.split(message.text)
         except ValueError as error:
             # Something is incorrect in the user's command string
-            if isinstance(self.__logger__, Logger):
-                self.__logger__.error(' '.join([person.emails[0], 'caused:', error.args[0],
+            if isinstance(self._logger, Logger):
+                self._logger.exception(' '.join([person.emails[0], 'caused:', error.args[0],
                                                 'with the message:', message.text]))
             errordescription = ' '.join(["⚠️Error: Please check the format of your command.",
                                          error.args[0]])
@@ -120,8 +133,8 @@ class SparkBot:
         except Exception as error:
 
             # Build our logging string
-            if isinstance(self.__logger__, Logger):
-                self.__logger__.error(' '.join([person.emails[0], 'caused:', type(error).__name__,
+            if isinstance(self._logger, Logger):
+                self._logger.exception(' '.join([person.emails[0], 'caused:', type(error).__name__,
                                                 error.args[0], 'with the command:', message.text]))
             try:
                 errordescription = error.args[1]
@@ -162,13 +175,15 @@ class SparkBot:
         if func in self.commands:
             command_to_run = self.commands[func]
         else:
-            raise Exception('BC3CBCommandNotFound', 'Command not found. Maybe try "help"?')
+            raise CommandNotFound('No command found', 'Command not found. Maybe try "help"?')
 
         # To add a new argument for commands to use, have them sent into this function by
-        # commandworker and add them here to be passed to execute(). Then, add the new
-        # variable to possible_parameters in the Command object.
-        return command_to_run.execute(commandline=commandline, callback=self.respond,
-                                      event=event_json_dict, caller=caller, room_id=room_id)
+        # commandworker. Then, add them here and to the signature of Command.execute()
+        return command_to_run.execute(commandline=commandline,
+                                      callback=self.respond,
+                                      event=event_json_dict,
+                                      caller=caller,
+                                      room_id=room_id)
 
 
     def respond(self, spark_room, markdown):
@@ -237,42 +252,59 @@ class SparkBot:
         return output
 
 class Command:
-    """Represents a command that can be executed by a SparkBot
+    """ Represents a command that can be executed by a SparkBot
 
     :param function: The function that this command will execute. Must return a str.
     """
 
     def __init__(self, function):
         self.function = function
-    
+
     @classmethod
     def create_callback(self, respond, room_id):
-        """ Creates a callback method.
+        """ Pre-fills room ID in the function given by ``respond``
 
-        Adds the room ID to the default 'respond' method from SparkBot, simplifying the 'callback'
-        experience for bot developers.
+        Adds the room ID as the first argument of the function given in ``respond``, simplifying the
+        'callback' experience for bot developers.
 
-        :param respond: The 'respond' method to add the room ID to
+        :param respond: The method to add the room ID to
 
-        :param room_id: The ID of the room to preset in 'respond'
+        :param room_id: The ID of the room to preset in ``respond``
         """
 
         callback = functools.partial(respond, room_id)
         callback.__doc__ = ("SparkBot.respond method with room_id pre-filled, call this with ",
                             "the message you would like to reply inside the called room with.")
         return callback
-        
 
-    def execute(self, **kwargs):
-        "Executes this command"
 
-        room_id = kwargs["room_id"]
+    def execute(self, commandline=None, event=None, caller=None, callback=None, room_id=None):
+        """ Executes this command's ``function``
 
-        possible_parameters = {"commandline": kwargs["commandline"],
-                               "event": kwargs["event"],
-                               "caller": kwargs["caller"],
-                               "callback": "",
-                               "room_id": room_id}
+        Executes this Command's target function using the given parameters as needed. All
+        parameters are required for normal function, named parameters are used for ease of
+        understanding of the written code.
+
+        :param commandline: ``shlex.split()``-processed list of tokens which make up the bot user's
+                            message
+
+        :param event: The webhook event that was sent to us by Webex Teams
+
+        :param caller: The Person who pinged the bot to start this process
+
+        :type caller: ciscosparkapi.Person
+
+        :param callback: Function to be used as a callback. :func:`Command.create_callback()` is
+                         used to turn this into a partial function, so the first argument of this
+                         function must be a Spark room ID that the bot author will expect to act on.
+
+        :param room_id: The ID of the room that the bot was called in
+
+        :returns: str,  the desired reply to the bot user
+
+        """
+
+        possible_parameters = locals()
 
         function_parameters = signature(self.function).parameters
         parameters_to_pass = {}
@@ -282,7 +314,7 @@ class Command:
 
         # Only create the callback function if it's needed
         if "callback" in parameters_to_pass:
-            respond = kwargs["callback"]
+            respond = possible_parameters["callback"]
             parameters_to_pass["callback"] = self.create_callback(respond, room_id)
 
         return self.function(**parameters_to_pass)
