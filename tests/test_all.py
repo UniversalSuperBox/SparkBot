@@ -208,7 +208,7 @@ class TestAPI:
             except ConnectionError:
                 pass
 
-    def invoke_bot(self, spark_api, bot_id, bot_displayname, markdown, room_name="Test", timeout=5):
+    def invoke_bot(self, spark_api, bot_id, bot_displayname, markdown, room_name="Test", expected_replies=1, timeout=10):
         """ Creates a new room, adds the bot, and messages the bot using the markdown specified.
 
         :param spark_api: ciscosparkapi.CiscoSparkAPI of another user (not the bot we're testing)
@@ -222,9 +222,12 @@ class TestAPI:
         :param room_name: The name of the room to create. Must be provided unique within each test.
                           Failure to provide a unique name will cause unexpected results.
 
+        :param expected_replies: The number of replies to wait for from the bot
+
         :param timeout: Maximum number of seconds to wait for the bot to respond.
 
-        :returns: Response from bot as a ciscosparkapi.Message
+        :returns: Response from bot as a ciscosparkapi.Message if ``expected_replies`` is 1,
+                  list of responses from bot if it is greater than 1.
         """
 
         message = "<@personId:{}|{}> ".format(bot_id, bot_displayname) + markdown
@@ -234,20 +237,28 @@ class TestAPI:
 
         sleep(1)
 
-        bot_reply = None
+        bot_replies = []
         for i in range(0, timeout):
 
+            # Pull each message from the test room. If we match one that's already in bot_replies,
+            # go on to the next one. Otherwise, if the reply came from the bot, store it.
             for message in spark_api.messages.list(room.id):
-                    if message.personId == bot_id:
-                        bot_reply = message
-                        break
+                if message.personId == bot_id and not message.id in [stored_message.id for stored_message in bot_replies]:
+                    bot_replies.append(message)
+                    next
 
-            if bot_reply:
+            if len(bot_replies) == expected_replies or i >= timeout:
                 break
             else:
                 sleep(1)
 
-        return bot_reply
+        # Order the replies by their send time
+        bot_replies.sort(key=lambda r: r.created)
+
+        if expected_replies == 1:
+            return bot_replies[0]
+        else:
+            return bot_replies
 
     def test_server_sanity(self, emulator_server):
         """Ensures the API server is sane"""
@@ -442,6 +453,25 @@ class TestAPI:
         bot_reply = self.invoke_bot(aux_api, emulator.bot_id, emulator.bot_displayname, "exception", room_name="test1")
 
         assert bot_reply.text == "⚠️ Error: Something happened internally. For more information, contact the bot author."
+
+    def test_full_yield_results(self, full_bot_setup):
+        """Tests that ``yield``ing from a function causes multiple replies"""
+
+        bot = full_bot_setup["bot"]
+        aux_api = full_bot_setup["aux_api"]
+        emulator = full_bot_setup["emulator"]
+
+        @bot.command("two-replies")
+        def two_replies(callback):
+            yield "Reply 1!"
+            yield "Reply 2!"
+
+        self.start_receiver(full_bot_setup["receiver_process"], full_bot_setup["receiver_webhook_url"])
+
+        bot_replies = self.invoke_bot(aux_api, emulator.bot_id, emulator.bot_displayname, "two-replies", expected_replies=2, room_name="test1")
+
+        assert bot_replies[0].text == "Reply 1!"
+        assert bot_replies[1].text == "Reply 2!"
 
     def test_receiver_incorrect_hmac(self, emulator_server, unique_port):
         """Tests that the receiver will reject a message with an incorrect signature"""

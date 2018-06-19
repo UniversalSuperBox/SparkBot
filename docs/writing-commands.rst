@@ -7,7 +7,7 @@ Introduction
 SparkBot provides a very simple interface for writing commands. You will be familiar with it if you have ever used Flask. Here's a simple ``ping`` command::
 
     @MY_BOT.command("ping")
-    def ping(caller):
+    def ping():
         """
         Checks if the bot is running.
 
@@ -114,31 +114,35 @@ Using a helper function, :func:`sparkbot.commandhelpers.minargs`, we check to ma
 
 As you can see, you can quickly create a CLI-like interface by iterating over the tokens in this list.
 
-.. _early-reply:
-
 Replying early
 --------------
 
-If a command will be running for a very long time, you may want to notify the user of its progress. SparkBot recognizes a ``callback`` keyword that gives you access to a callback function. You may use this callback function to send a message in the room where the user called the bot. We'll see an example of this in the following function:
+SparkBot allows you to use the ``yield`` keyword in place of ``return`` to reply to the user before your command's code has completed. This may be useful if you have a command that will perform a very long operation and you would like to notify the user that it is in progress.
 
 .. code-block:: python
-   :emphasize-lines: 9
+   :emphasize-lines: 9, 13
 
     @MY_BOT.command("ping")
-    def ping_callback(callback):
+    def ping_callback():
         """
         Usage: `ping`
 
         Returns **pong**, but with a twist.
         """
 
-        callback("a twist.")
+        yield "a twist"
 
-        return '**pong**'
+        # Some code which runs for a long time
+
+        yield "**pong**"
 
 .. figure:: /_static/writing-commands/SparkBot-wc-replyEarly.PNG
    :alt: Using the ping command with an interim response
    :scale: 65%
+
+.. versionchanged:: 0.1.0
+
+   ``yield`` to reply early has been added as a replacement for the ``callback`` argument previously used to get a function used for the same purpose. ``callback`` will be removed in SparkBot version 1.0.0.
 
 List of recognized keywords
 ---------------------------
@@ -149,7 +153,6 @@ Keyword         Data
 commandline     List containing user's message split into tokens by `shlex.split`_. :ref:`arguments`
 event           Dictionary containing the `event request`_ from Spark.
 caller          `ciscosparkapi.Person`_ for the user that called this command
-callback        Function that can be used to reply to the user that called this command. :ref:`early-reply`
 room_id         ``Str`` containing the ID of the room where this command was called
 ==============  ====
 

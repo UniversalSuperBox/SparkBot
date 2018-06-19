@@ -18,7 +18,7 @@ from .exceptions import CommandNotFound
 import shlex
 import textwrap
 import functools
-from types import FunctionType
+from types import FunctionType, GeneratorType
 from logging import Logger
 from inspect import signature
 from ciscosparkapi import CiscoSparkAPI, Webhook, Room
@@ -147,9 +147,12 @@ class SparkBot:
         else:
             finalresponse = usercommandresponse
 
-        self.respond(room_id, finalresponse)
-
-        return True
+        # finalresponse will be a Generator if the executed function contains the yield keyword.
+        if isinstance(finalresponse, str):
+            self.respond(room_id, finalresponse)
+        elif isinstance(finalresponse, GeneratorType):
+            for response in finalresponse:
+                self.respond(room_id, response)
 
     def _executeuserfunction(self, func, commandline, event_json_dict, caller, room_id):
         """Runs the bot user's specified command (found in func) if it exists.
@@ -314,7 +317,7 @@ class Command:
 
         # Only create the callback function if it's needed
         if "callback" in parameters_to_pass:
-            respond = possible_parameters["callback"]
-            parameters_to_pass["callback"] = self.create_callback(respond, room_id)
+            callback_partial = self.create_callback(callback, room_id)
+            parameters_to_pass["callback"] = self.create_callback(callback, room_id)
 
         return self.function(**parameters_to_pass)
