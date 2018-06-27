@@ -14,31 +14,42 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .exceptions import CommandNotFound
+from .exceptions import CommandNotFound, SparkBotError
+from . import receiver
 import shlex
 import textwrap
 import functools
 from types import FunctionType, GeneratorType
 from logging import Logger
 from inspect import signature
+from os import environ
+import falcon
 from ciscosparkapi import CiscoSparkAPI, Webhook, Room
 
 class SparkBot:
     """ A bot for Cisco Webex Teams
 
-    SparkBot has a ``help`` and ``help-all`` command built in by default. These may be overridden
-    using :func:`command` decorator and providing the "help" or "help-all" arguments and a function
-    with your desired behavior on calling ``help``. See :doc:`Writing Commands </writing-commands>`
-    for more information on writing commands.
+    SparkBot automatically creates a webhook for itself and will delete any other webhooks on its
+    bot account. To do this, it uses the ``root_url`` parameter or ``WEBHOOK_URL`` in the
+    environment to know its public URL.
+
+    SparkBot has a ``help`` command built in by default. These may be overridden using the
+    :func:`command` decorator and providing the "help" argument and a function with your desired
+    behavior on calling ``help``. See :doc:`Writing Commands </writing-commands>` for more
+    information on writing commands.
 
     :param spark_api: CiscoSparkAPI instance that this bot should use
     :type spark_api: ciscosparkapi.CiscoSparkAPI
+
+    :param root_url: The base URL for the SparkBot webhook receiver. May also be provided as
+                     ``WEBHOOK_URL`` in the environment.
+    :type root_url: str
 
     :param logger: Logger that the bot will output to
     :type logger: logging.Logger
     """
 
-    def __init__(self, spark_api, logger=None):
+    def __init__(self, spark_api, root_url=None, logger=None):
 
         if isinstance(spark_api, CiscoSparkAPI):
             self.spark_api = spark_api
@@ -55,10 +66,41 @@ class SparkBot:
 
         self.commands = {}
         self.commands["help"] = Command(self.my_help)
-        self.commands["help-all"] = Command(self.my_help_all)
 
         # Cache "me" to speed up commands requiring it
         self.me = self.spark_api.people.me()
+
+        if not root_url:
+            try:
+                root_url = environ["WEBHOOK_URL"]
+            except KeyError:
+                if self._logger:
+                    self._logger.warn(("SparkBot instanced without a webhook URL argument. This is "
+                                       "done in the test suite, but is generally not advisable for "
+                                       "normal use."))
+        elif not isinstance(root_url, str):
+            raise TypeError("root_url is not of type str")
+
+        # Create my receiver
+        self.webhook_secret = receiver.random_bytes(32)
+        self.receiver = receiver.create(self)
+
+        # Create my webhook
+        if root_url:
+
+            if root_url.startswith("http:"):
+                if self._logger:
+                    self._logger.warn(("Creating SparkBot with http-only webhook. This is not "
+                                       "recommended. Please use an HTTPS webhook to better secure "
+                                       "your users' data."))
+
+            for webhook in self.spark_api.webhooks.list():
+                self.spark_api.webhooks.delete(webhook.id)
+            self.spark_api.webhooks.create("myBot",
+                                           root_url + "/sparkbot",
+                                           "messages",
+                                           "created",
+                                           secret=self.webhook_secret.decode())
 
     def command(self, command_strings):
         """ Decorator that adds a command to this bot.
@@ -188,9 +230,8 @@ class SparkBot:
                                       caller=caller,
                                       room_id=room_id)
 
-
     def respond(self, spark_room, markdown):
-        """Replies to our caller.
+        """Sends a message to a Spark room.
 
         :param markdown: Markdown formatted string to send
 
@@ -218,7 +259,7 @@ class SparkBot:
         try:
             command_to_help = commandline[1]
         except IndexError:
-            # The user did not specify a command to get help on. Return the "Help-all" command.
+            # The user did not specify a command to get help on. Return the "help-all" command.
             return self.my_help_all()
 
         if str.lower(command_to_help) == "all":
@@ -237,11 +278,7 @@ class SparkBot:
         return help_text
 
     def my_help_all(self):
-        """
-        Usage: `help-all`
-
-        Returns a list of all commands
-        """
+        """Returns a formatted list of all commands for this bot"""
         command_list = []
 
         for command in self.commands:
@@ -317,7 +354,6 @@ class Command:
 
         # Only create the callback function if it's needed
         if "callback" in parameters_to_pass:
-            callback_partial = self.create_callback(callback, room_id)
             parameters_to_pass["callback"] = self.create_callback(callback, room_id)
 
         return self.function(**parameters_to_pass)

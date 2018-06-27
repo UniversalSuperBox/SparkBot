@@ -1,16 +1,22 @@
 [Unit]
 Description=Cisco Spark chatbot
+Requires=sparkbot.socket
+After=network.target
 
 [Service]
+PIDFile=/run/sparkbot/pid
+RuntimeDirectory=sparkbot
 Environment="SPARK_ACCESS_TOKEN="
 Environment="WEBHOOK_URL="
-Environment="RECEIVER_PORT="
-Type=simple
-User={USER}
-ExecStart=/home/{USER}/env/bin/python /home/{USER}/sparkbot/run.py
-WorkingDirectory=/home/{USER}/sparkbot/
+User=sparkbot
+ExecStart=/home/sparkbot/sparkbotenv/bin/gunicorn \
+            --bind unix:/run/gunicorn/socket run:bot.receiver
+WorkingDirectory=/home/sparkbot/
 Restart=on-abort
 StandardOutput=journal
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s TERM $MAINPID
+PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target

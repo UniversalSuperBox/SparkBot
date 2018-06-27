@@ -105,7 +105,7 @@ setup(
     # https://packaging.python.org/en/latest/requirements.html
     install_requires=[
         'CiscoSparkAPI',
-        'bottle'
+        'falcon'
     ],
 
     # List additional groups of dependencies here (e.g. development

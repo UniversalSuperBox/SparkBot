@@ -1,0 +1,8 @@
+[Unit]
+Description=SparkBot gunicorn socket
+
+[Socket]
+ListenStream=/run/sparkbot/socket
+
+[Install]
+WantedBy=sockets.target

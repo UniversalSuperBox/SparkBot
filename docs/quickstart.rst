@@ -3,10 +3,10 @@ Quickstart
 
 This document will lead you through the steps to run the base Sparkbot instance.
 
-Get a token from Spark
-----------------------
+Get a token from Webex Teams
+----------------------------
 
-Head over to Cisco Spark for Developer's `My Apps portal`_ and click the Add button to create a new bot. Go through the steps to create a bot. Once you're finished, copy the Bot's Access Token somewhere safe. We'll need it later in this process.
+Head over to Cisco Webex Teams for Developer's `My Apps portal`_ and click the Add button to create a new bot. Go through the steps to create a bot. Once you're finished, copy the Bot's Access Token somewhere safe. We'll need it later in this process.
 
 Dependencies
 ------------
@@ -16,21 +16,19 @@ First you'll need to install the prerequisites for running SparkBot.
 SparkBot requires the following software:
 
 * Python 3.5 or higher
-* Reverse proxy, such as nginx, for its webhook receiver
+* Reverse proxy, such as nginx, for its webhook receiver. We'll be using `ngrok`_ in this quickstart.
 
 Ubuntu 16.04
 ^^^^^^^^^^^^
 
 To install the prerequisites on Ubuntu 16.04::
 
-    sudo apt install python3 python3-virtualenv nginx
+    sudo apt install python3 python3-virtualenv python3-pip nginx
 
 Clone the source
 ----------------
 
-Clone the bot's source to the home directory of the user you will be running it as. I recommend creating a service account and using it to run the bot.
-
-From here on, we'll assume that the bot's source code is located in ``~/sparkbot``.
+Clone the bot's source to your desired location. From here on, we'll assume that the bot's source code is located in ``~/sparkbot``, but you can change the path as you need.
 
 Copy run.py.example
 -------------------
@@ -50,58 +48,34 @@ Create and activate a Python(3.5+) virtualenv for the bot::
 Now we can install the required Python packages::
 
     pip install -r ~/sparkbot/requirements.txt
+    pip install gunicorn
 
-Add nginx configuration
------------------------
+Use ngrok for a temporary reverse proxy
+---------------------------------------
 
-We'll use nginx to proxy requests to the bot. You may use this configuration as a template for your reverse proxy::
-
-    server {
-        listen 80;
-        server_name [FQDN];
-        root /var/www/default1;
-        location / {
-                proxy_pass http://localhost:8080/;
-        }
-    }
-
-SparkBot assumes that it will be reachable over HTTPS. If you do not have a reverse proxy in front of your bot's server that will provide this for you, you will need to change these options to provide TLS.
+`ngrok`_ is a great service for setting up temporary public URLs. We'll be using it to quickly test
+our bot configuration. `Download ngrok`_, then run ``ngrok http 8000`` to get it running.
 
 Run the bot
 -----------
 
-We can now test the bot. Sparkbot requires that a few environment variables need to be set. Replace ``[url]`` below with the URL that points to your HTTPS endpoint without the protocol or trailing slashes (for example, enter ``127.0.0.1`` for ``https://127.0.0.1/``). Replace ``[api_token]`` with the token that Spark gave you for your bot::
+We can now test the bot. Sparkbot requires that a few environment variables be set, so we'll ``export`` them before we run::
 
     cd ~/sparkbot
     source ~/sparkbotEnv/bin/activate
     export SPARK_ACCESS_TOKEN=[api_token]
     export WEBHOOK_URL=[url]
-    export RECEIVER_PORT=8080
-    python run.py
+    gunicorn run:bot.receiver
 
-The bot should now be running and, assuming your proxy is working correctly, be able to respond to requests directed at it from Spark. Try messaging the bot with ``ping`` or ``help`` to see if it will respond.
+Replace ``[url]`` with the URL that points to your webhook endpoint. Since we're using ngrok, put the ``https`` Forwarding URL here. Replace ``[api_token]`` with the token that Webex Teams gave you for your bot.
 
-Auto-start with systemd
--------------------------------
+The bot should now be running and, assuming your proxy is working correctly, be able to receive requests directed at it from Webex Teams. Try messaging the bot with ``ping`` or ``help`` to see if it will respond.
 
-You can set up the bot so that it runs when the computer boots up. To do that, we'll create and edit a systemd unit.
+Next steps
+----------
 
-First, create the file ``/etc/systemd/system/sparkbot.service`` with the following content. Replace ``{USER}`` with the account you created to run the bot. Once finished, save and close the file then run ``systemctl daemon-reload``:
+Now that you've got the bot running, you may want to learn more about :doc:`/writing-commands` or :doc:`Deploying SparkBot </deploy>`
 
-.. literalinclude:: /_static/sparkbot.service
-   :caption: /etc/systemd/system/sparkbot.service
-
-Next, run ``systemctl edit sparkbot.service`` and enter the following, changing the options in curly brackets to match your desired settings:
-
-.. literalinclude:: /_static/sparkbot.service.edit
-   :caption: systemctl edit sparkbot.service
-
-The values should be the same as the ones you used when you followed `Run the bot`_ above.
-
-Once that's finished, run the following to enable the bot on startup::
-
-    systemctl daemon-reload
-    systemctl enable sparkbot
-    systemctl start sparkbot
-
-.. _my apps portal: https://developer.ciscospark.com/apps.html
+.. _my apps portal: https://developer.webex.com/apps.html
+.. _ngrok: https://ngrok.com/
+.. _download ngrok: https://ngrok.com/download

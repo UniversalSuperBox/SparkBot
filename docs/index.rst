@@ -9,6 +9,7 @@ Welcome to the documentation for SparkBot! If you're looking for the fastest way
 
    quickstart
    writing-commands
+   deploy
    sparkbot
 
 

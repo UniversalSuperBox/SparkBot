@@ -6,7 +6,8 @@ import string
 from unittest import mock
 from multiprocessing import Process
 from time import sleep
-from sparkbot import SparkBot
+from sparkbot import SparkBot, receiver
+from wsgiref import simple_server
 import requests
 from requests.exceptions import ConnectionError
 from ciscosparkapi import CiscoSparkAPI
@@ -111,21 +112,6 @@ class TestAPI:
         yield emulator
         emulator.stop()
 
-    def make_receiver(self, bot, spark_api, webhook_key=None):
-        """ Sets up a receiver for use in testing
-
-        :param bot: bot object to set to this receiver
-
-        :param spark_api: ciscosparkapi.CiscoSparkAPI object to use for this receiver
-        """
-        from sparkbot import receiver
-
-        receiver.BOT_INSTANCE = bot
-        receiver.SPARK_API = spark_api
-        receiver.WEBHOOK_KEY = webhook_key
-
-        return receiver
-
     def get_spark_api(self, server):
         """
         Returns a ciscosparkapi.CiscoSparkAPI object for the server.WebexAPIEmulator
@@ -159,24 +145,27 @@ class TestAPI:
         return_items = {}
 
         return_items["bot_api"] = self.get_spark_api(emulator_server)
+        receiver_port = unique_port.__next__()
+        return_items["receiver_webhook_url"] = "http://127.0.0.1:" + str(receiver_port)
         return_items["aux_api"] = CiscoSparkAPI(base_url=emulator_server.url,
                                                 access_token="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-        return_items["bot"] = SparkBot(return_items["bot_api"], logger = getLogger(name="Bot"))
+        return_items["bot"] = SparkBot(return_items["bot_api"],
+                                       root_url = return_items["receiver_webhook_url"],
+                                       logger = getLogger(name="Bot"))
         secret = self.random_bytes(32)
-        return_items["receiver"] = self.make_receiver(return_items["bot"],
-                                                      return_items["bot_api"],
-                                                      webhook_key=secret)
-        receiver_port = unique_port.__next__()
-        return_items["receiver_webhook_url"] = "http://127.0.0.1:" + str(receiver_port) + "/sparkreceiver"
+        return_items["receiver"] = receiver.create(return_items["bot"])
         return_items["emulator"] = emulator_server
         return_items["bot_api"].webhooks.create("myBot",
-                                                  return_items["receiver_webhook_url"],
-                                                  "messages",
-                                                  "created",
-                                                  secret=secret.decode())
+                                                return_items["receiver_webhook_url"],
+                                                "messages",
+                                                "created",
+                                                secret=secret.decode())
 
-        receiver_process = Process(target=return_items["receiver"].run,
-                                   kwargs={"port": receiver_port})
+        receiver_server = simple_server.make_server("localhost",
+                                                    receiver_port,
+                                                    return_items["receiver"])
+
+        receiver_process = Process(target=receiver_server.serve_forever)
         return_items["receiver_process"] = receiver_process
 
         yield return_items
@@ -402,23 +391,15 @@ class TestAPI:
         bot_reply_2 = self.invoke_bot(aux_api,
                         emulator.bot_id,
                         emulator.bot_displayname,
-                        "help-all",
-                        room_name="test2")
-
-        bot_reply_3 = self.invoke_bot(aux_api,
-                        emulator.bot_id,
-                        emulator.bot_displayname,
                         "help all",
                         room_name="test3")
 
         assert bot_reply_1.markdown == (
 """Type `help [command]` for more specific help about any of these commands:
- - help
- - help-all"""
+ - help"""
         )
 
         assert bot_reply_1.markdown == bot_reply_2.markdown
-        assert bot_reply_2.markdown == bot_reply_3.markdown
 
     def test_full_internal_error_text(self, full_bot_setup):
         """Tests that unhandled exceptions in commands with error text are handled safely"""
@@ -479,15 +460,20 @@ class TestAPI:
         spark_api = self.get_spark_api(emulator_server)
         bot = SparkBot(spark_api)
         receiver_port = unique_port.__next__()
-        webhook_url = ''.join(["http://127.0.0.1:", str(receiver_port), "/sparkreceiver"])
+        webhook_url = ''.join(["http://127.0.0.1:", str(receiver_port), "/sparkbot"])
 
         # Give the receiver an incorrect key
-        my_receiver = self.make_receiver(bot, spark_api, webhook_key=b"1234")
+        bot.webhook_secret = b"1234"
+        my_receiver = receiver.create(bot)
 
         # Now, start the receiver in another process...
-        p = Process(target=my_receiver.run, kwargs={"port": receiver_port})
+        receiver_server = simple_server.make_server("localhost",
+                                                    receiver_port,
+                                                    my_receiver)
 
-        self.start_receiver(p, webhook_url)
+        receiver_process = Process(target=receiver_server.serve_forever)
+
+        self.start_receiver(receiver_process, webhook_url)
 
         try:
             # Send a good request to the server with a junk signature.
@@ -514,8 +500,8 @@ class TestAPI:
             r = requests.post(webhook_url, json=payload, headers={"x-spark-signature":"asdf1234"})
 
         finally:
-            p.terminate()
-            p.join()
+            receiver_process.terminate()
+            receiver_process.join()
 
         assert r.status_code == 403
 
@@ -525,21 +511,27 @@ class TestAPI:
         spark_api = self.get_spark_api(emulator_server)
         bot = SparkBot(spark_api)
         receiver_port = unique_port.__next__()
-        webhook_url = ''.join(["http://127.0.0.1:", str(receiver_port), "/sparkreceiver"])
+        webhook_url = ''.join(["http://127.0.0.1:", str(receiver_port) + "/sparkbot"])
 
         # Give the receiver an incorrect key
-        my_receiver = self.make_receiver(bot, spark_api, webhook_key=b"1234")
+        bot.webhook_secret = b"1234"
+        my_receiver = receiver.create(bot)
 
         # Now, start the receiver in another process...
-        p = Process(target=my_receiver.run, kwargs={"port": receiver_port})
-        self.start_receiver(p, webhook_url)
+        receiver_server = simple_server.make_server("localhost",
+                                                    receiver_port,
+                                                    my_receiver)
+
+        receiver_process = Process(target=receiver_server.serve_forever)
+
+        self.start_receiver(receiver_process, webhook_url)
 
         try:
             # Send nothing.
             r = requests.post(webhook_url)
         finally:
-            p.terminate()
-            p.join()
+            receiver_process.terminate()
+            receiver_process.join()
 
         assert r.status_code == 400
 
@@ -552,7 +544,7 @@ class TestAPI:
             SparkBot("This is not a CiscoSparkAPI")
 
         with pytest.raises(TypeError):
-            SparkBot(spark_api, "This is not a logger")
+            SparkBot(spark_api, logger="This is not a logger")
 
     def test_bad_command_strings(self, emulator_server):
         """Tests that the bot will fail to add a command with the incorrect argument"""

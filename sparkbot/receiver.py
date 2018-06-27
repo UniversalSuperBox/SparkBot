@@ -15,52 +15,80 @@
 from threading import Thread
 import hmac
 import hashlib
-from bottle import request, post, get, HTTPResponse, run, abort
-from ciscosparkapi import CiscoSparkAPI, Webhook
+import json
+from random import SystemRandom
+import string
+import falcon
+from ciscosparkapi import CiscoSparkAPI
 
-BOT_INSTANCE = None
-SPARK_API = None
-WEBHOOK_KEY = None
-ME = None
+class ReceiverResource(object):
 
-@post('/sparkreceiver')
-def call_core():
-    """Receives messages and passes them to the sparkbot instance in BOT_INSTANCE"""
+    def __init__(self, bot):
+        self.bot = bot
+        self.me = self.bot.spark_api.people.me()
 
-    global ME
+    def on_post(self, req, resp):
+        """Receives messages and passes them to the sparkbot instance in BOT_INSTANCE"""
 
-    if not BOT_INSTANCE or not SPARK_API:
-        return HTTPResponse(status=500)
+        resp.status = falcon.HTTP_204
 
-    if not request.json:
-        return HTTPResponse(status=400, body="Missing command")
+        if not self.bot:
+            resp.status = falcon.HTTP_500
+            return
 
-    json_data = request.json
+        if not req.content_length:
+            resp.status = falcon.HTTP_400
+            resp.body = "Missing command"
+            return
 
-    if WEBHOOK_KEY:
+        raw_response_body = req.bounded_stream.read()
+        json_data = json.loads(raw_response_body.decode("utf-8"))
 
-        try:
-            # Get the HMAC of the incoming message
-            expected_digest = request.headers["x-spark-signature"]
-        except KeyError:
-            # We expected but didn't receive a signature. Don't process any further.
-            return HTTPResponse(status=403)
+        if self.bot.webhook_secret:
 
-        real_digest = hmac.new(WEBHOOK_KEY, msg=request.body.read(), digestmod=hashlib.sha1)
-        if not real_digest.hexdigest() == expected_digest:
-            # The received signature doesn't match the one we expect.
-            return HTTPResponse(status=403)
+            try:
+                # Get the HMAC of the incoming message
+                expected_digest = req.get_header("X-SPARK-SIGNATURE")
+            except KeyError:
+                # We expected but didn't receive a signature. Don't process any further.
+                resp.status = falcon.HTTP_403
+                return
 
-    # Loop prevention
-    if not ME:
-        # Cache ME since the Spark API can be really slow
-        ME = SPARK_API.people.me()
-    message_person_id = json_data["actorId"]
-    if message_person_id == ME.id:
-        # Message was sent by me (bot); do not respond.
-        return HTTPResponse(status=204)
+            real_digest = hmac.new(self.bot.webhook_secret, msg=raw_response_body, digestmod=hashlib.sha1)
+            if not hmac.compare_digest(real_digest.hexdigest(), expected_digest):
+                # The received signature doesn't match the one we expect.
+                resp.status = falcon.HTTP_403
+                return
 
-    bot_thread = Thread(target=BOT_INSTANCE.commandworker, args=(json_data,))
-    bot_thread.start()
+        # Loop prevention
+        message_person_id = json_data["actorId"]
+        if message_person_id == self.me.id:
+            # Message was sent by me (bot); do not respond.
+            return
 
-    return HTTPResponse(status=204)
+        bot_thread = Thread(target=self.bot.commandworker, args=(json_data,))
+        bot_thread.start()
+
+        return
+
+def create(bot):
+    """Creates a falcon.API instance with the required behavior for a SparkBot receiver.
+
+    Currently the API webhook path is hard-coded to ``/sparkbot``
+
+    :param bot: :class:`sparkbot.SparkBot` instance for this API instance to use
+    """
+
+    api = falcon.API()
+    api_behavior = ReceiverResource(bot)
+    api.add_route("/sparkbot", api_behavior)
+
+    return api
+
+def random_bytes(length):
+    """ Returns a random bytes array with uppercase and lowercase letters, of length length"""
+    cryptogen = SystemRandom()
+    my_random_string = ''.join([cryptogen.choice(string.ascii_letters) for _ in range(length)])
+    my_random_bytes = my_random_string.encode(encoding='utf_8')
+
+    return my_random_bytes

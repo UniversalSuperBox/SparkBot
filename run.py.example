@@ -15,60 +15,26 @@
 import logging
 from logging.config import fileConfig
 import os
-from random import SystemRandom
-import string
 import sparkbot
 from sparkbot import receiver, commandhelpers
 from ciscosparkapi import CiscoSparkAPI
 
-def random_bytes(length):
-    """ Returns a random bytes array with uppercase and lowercase letters, of length length"""
-    cryptogen = SystemRandom()
-    my_random_string = ''.join([cryptogen.choice(string.ascii_letters) for _ in range(length)])
-    my_random_bytes = my_random_string.encode(encoding='utf_8')
+LOGGER = logging.getLogger('sparkbot')
 
-    return my_random_bytes
+# Initialize the environment
+spark_api = CiscoSparkAPI()
+bot = sparkbot.SparkBot(spark_api, logger=LOGGER)
 
-if __name__ == '__main__':
-    LOGGER = logging.getLogger('sparkbotCore')
+# Add commands here
+@bot.command("ping")
+def ping(caller, room_id):
+    """
+    Usage: `ping`
 
-    # Initialize the environment
-    SPARK_API = CiscoSparkAPI()
-    MY_BOT = sparkbot.SparkBot(SPARK_API, LOGGER)
-    SPARK_SECRET = random_bytes(32)
+    Returns **pong**.
+    """
 
-
-    # Add commands here
-    @MY_BOT.command("ping")
-    def ping(caller, room_id):
-        """
-        Usage: `ping`
-
-        Returns **pong**.
-        """
-
-        if commandhelpers.is_group(SPARK_API, room_id):
-            return '{}, **pong**'.format(commandhelpers.mention_person(caller))
-        else:
-            return '**pong**'
-
-
-    # Actually run the bot
-    try:
-        WEBHOOK_URL = ''.join(["https://", os.environ["WEBHOOK_URL"], "/sparkreceiver"])
-        RECEIVER_PORT = os.environ["RECEIVER_PORT"]
-    except KeyError:
-        print("WEBHOOK_URL and RECEIVER_PORT must be provided in the environment.")
-        exit(1)
-    # Remove all previous webhooks
-    for webhook in SPARK_API.webhooks.list():
-        SPARK_API.webhooks.delete(webhook.id)
-
-    # Make a new webhook with a secret that we can validate
-    SPARK_API.webhooks.create("myBot", WEBHOOK_URL,
-                              "messages", "created", secret=SPARK_SECRET.decode())
-
-    receiver.BOT_INSTANCE = MY_BOT
-    receiver.SPARK_API = SPARK_API
-    receiver.WEBHOOK_KEY = SPARK_SECRET
-    receiver.run(debug=False, port=RECEIVER_PORT)
+    if commandhelpers.is_group(spark_api, room_id):
+        return '{}, **pong**'.format(commandhelpers.mention_person(caller))
+    else:
+        return '**pong**'
