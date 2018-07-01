@@ -87,7 +87,16 @@ class TestAPI:
 
         emulator_server_zip.extractall(path=str(tmpdir))
 
-        return tmpdir.join(emulator_server_zip.namelist()[0])
+        # Python 3.6+ had a behavior change for zip files. Zipfiles created on
+        # 3.5 have `webex-api-emulator-master` as their first component. 3.6+
+        # zipfiles do not have this.
+
+        zip_component = ""
+
+        if emulator_server_zip.namelist()[0] == "webex-api-emulator-master/":
+            zip_component = "webex-api-emulator-master/"
+
+        return tmpdir.join(zip_component)
 
     @pytest.fixture(scope="session")
     def unique_port(self):
