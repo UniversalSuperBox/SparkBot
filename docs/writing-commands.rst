@@ -57,6 +57,10 @@ When we add this to the area below the ``# Add commands here`` comment and re-ru
    :alt: Using the 'ping' command
    :scale: 65%
 
+.. note::
+
+    Commands must always be added to the bot prior to the receiver starting. This means that the bot cannot add or remove commands from *itself*. Changes will always require a restart.
+
 .. _arguments:
 
 Taking arguments
@@ -64,7 +68,7 @@ Taking arguments
 
 In many cases you will want to take arguments to your commands. Sparkbot uses `shlex.split`_ to split the message sent by the user into multiple 'tokens' that are given to you in a list. These tokens are split in a similar way to a POSIX shell.
 
-Here's a command that uses this type of input. It simply returns the first token in the list:
+Here's a command that uses this type of input. It returns the first token in the list:
 
 .. code-block:: python
 
@@ -143,6 +147,59 @@ SparkBot allows you to use the ``yield`` keyword in place of ``return`` to reply
 .. versionchanged:: 0.1.0
 
    ``yield`` to reply early has been added as a replacement for the ``callback`` argument previously used to get a function used for the same purpose. ``callback`` will be removed in SparkBot version 1.0.0.
+
+Overriding behavior
+-------------------
+
+SparkBot comes with default behavior that will work well for simple bots. However, you may need to override some of this behavior to provide a richer experience for your users.
+
+"Help" command
+^^^^^^^^^^^^^^
+
+Override
+""""""""
+
+The default SparkBot ``help`` command is simplistic:
+
+.. figure:: /_static/writing-commands/SparkBot-wc-help-default.PNG
+   :alt: Default SparkBot help command
+
+If you want to do something different when your user asks for help, you can add a new command in the same slot as "help"::
+
+    @bot.command("help")
+    def new_help():
+        return "It's the new help command!"
+
+.. figure:: /_static/writing-commands/SparkBot-wc-help-overriden.PNG
+   :alt: Overriden behavior for the help command
+
+Remove
+""""""
+
+If you'd prefer to remove the help command altogether, you can do so by calling :func:`SparkBot.remove_help() <sparkbot.core.SparkBot.remove_help>`.
+
+.. note::
+
+    Similar to adding commands, removing commands must be performed before the bot has started. It is not possible to remove help "in-flight", such as from another command.
+
+"Command not found"
+^^^^^^^^^^^^^^^^^^^ 
+
+By default, when the user tries to use a command that doesn't exist, they get an error:
+
+.. figure:: /_static/writing-commands/SparkBot-wc-nocommand.PNG
+   :alt: Default SparkBot "Command not found" error
+
+It may be desirable for you to do something else (return a more fun error message, give suggestions rather than an error, or maybe use NLP to determine what the user wanted).
+
+You can add a command as a fallback by omitting its command strings and adding the ``fallback_command=True`` argument to the command decorator::
+
+    @bot.command(fallback=True)
+    def fallback():
+        return "This is a fallback command"
+
+.. figure:: /_static/writing-commands/SparkBot-wc-override-nocommand.PNG
+   :alt: Overridden "Command not found" behavior
 
 List of recognized keywords
 ---------------------------

@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .exceptions import CommandNotFound, SparkBotError
+from .exceptions import CommandNotFound, SparkBotError, CommandSetupError
 from . import receiver
 import shlex
 import textwrap
@@ -66,6 +66,10 @@ class SparkBot:
 
         self.commands = {}
         self.commands["help"] = Command(self.my_help)
+        self.fallback_command = None
+
+        # Message sent to user when they request a command that doesn't exist.
+        self.command_not_found_message = "Command not found. Maybe try 'help'?"
 
         # Cache "me" to speed up commands requiring it
         self.me = self.spark_api.people.me()
@@ -102,19 +106,33 @@ class SparkBot:
                                            "created",
                                            secret=self.webhook_secret.decode())
 
-    def command(self, command_strings):
+    def command(self, command_strings=[], fallback=False):
         """ Decorator that adds a command to this bot.
 
         :param command_strings: Callable name(s) of command. When a bot user types this (these),
                                 they call the decorated function. Pass a single string for a single
                                 command name. Pass a list of strings to give a command multiple
                                 names.
+        :type command_strings: list
+        :type command_strings: str
+
+
+        :param fallback: False by default, not required. If True, sets this command as a
+                         "fallback command", used when the user requests a command that does not
+                         exist.
+        :type fallback: bool
+        
+        :raises CommandSetupError: Arguments or combination of arguments was incorrect.
+                                   The error description will have more details.  
+        
+        :raises TypeError: Type of arguments was incorrect.
+
         """
 
-        if not command_strings:
-            raise TypeError("command_strings not given in call to SparkBot.command. At least one command name is required in your decorator.")
+        if not command_strings and not fallback:
+            raise CommandSetupError("command_strings not given (or empty) in call to SparkBot.command, and this is not a fallback command. At least one command name is required in your decorator.")
         elif isinstance(command_strings, FunctionType):
-            raise TypeError("command_strings not given in call to SparkBot.command. Did you include the parentheses in your decorator?")
+            raise CommandSetupError("command_strings not given in call to SparkBot.command. Did you include the parentheses in your decorator?")
 
         def decorator(function):
             if isinstance(command_strings, str):
@@ -124,14 +142,24 @@ class SparkBot:
             else:
                 raise TypeError("command_strings is not a str or list of str.")
 
+            if not isinstance(fallback, bool):
+                raise TypeError("fallback not a boolean in call to SparkBot.command. Do you have too many arguments in your decorator?")
+
             new_command = Command(function)
 
-            # Register new command object under each of its names
-            for command in names_to_register:
-                if not isinstance(command, str):
-                    raise TypeError("non-str object found in command_strings.")
+            if self.fallback_command:
+                # There is already a fallback command
+                raise CommandSetupError("Attempted to add a fallback command when one already exists.")
 
-                self.commands[command] = new_command
+            # Register new command object under each of its names
+            if fallback:
+                self.fallback_command = new_command
+            else:    
+                for command in names_to_register:
+                    if not isinstance(command, str):
+                        raise TypeError("non-str object found in command_strings.")
+
+                    self.commands[command] = new_command
 
             return function
 
@@ -196,6 +224,15 @@ class SparkBot:
             for response in finalresponse:
                 self.respond(room_id, response)
 
+    def remove_help(self):
+        """Removes the help command from the bot
+        
+        This will remove the help command even if it has been overridden.
+        """
+
+        self.command_not_found_message = "Command not found."
+        self.commands.pop("help", None)
+
     def _executeuserfunction(self, func, commandline, event_json_dict, caller, room_id):
         """Runs the bot user's specified command (found in func) if it exists.
 
@@ -219,8 +256,10 @@ class SparkBot:
         # Try to find command in the commands dictionary
         if func in self.commands:
             command_to_run = self.commands[func]
+        elif self.fallback_command:
+            command_to_run = self.fallback_command
         else:
-            raise CommandNotFound('No command found', 'Command not found. Maybe try "help"?')
+            raise CommandNotFound('No command found', self.command_not_found_message)
 
         # To add a new argument for commands to use, have them sent into this function by
         # commandworker. Then, add them here and to the signature of Command.execute()

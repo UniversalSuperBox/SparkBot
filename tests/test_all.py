@@ -7,6 +7,7 @@ from unittest import mock
 from multiprocessing import Process
 from time import sleep
 from sparkbot import SparkBot, receiver
+from sparkbot.exceptions import CommandSetupError
 from wsgiref import simple_server
 import requests
 from requests.exceptions import ConnectionError
@@ -463,6 +464,53 @@ class TestAPI:
         assert bot_replies[0].text == "Reply 1!"
         assert bot_replies[1].text == "Reply 2!"
 
+    def test_full_fallback(self, full_bot_setup):
+        """Tests fallback commands"""
+
+        bot = full_bot_setup["bot"]
+        aux_api = full_bot_setup["aux_api"]
+        emulator = full_bot_setup["emulator"]
+
+        @bot.command(fallback=True)
+        def fallback():
+            return "This is the fallback command"
+
+        self.start_receiver(full_bot_setup["receiver_process"], full_bot_setup["receiver_webhook_url"])
+
+        bot_reply = self.invoke_bot(aux_api, emulator.bot_id, emulator.bot_displayname, "exception", room_name="test1")
+
+        assert bot_reply.text == "This is the fallback command"
+
+    def test_full_remove_help(self, full_bot_setup):
+        """Tests that the Help command can be removed from the bot"""
+
+        bot = full_bot_setup["bot"]
+        aux_api = full_bot_setup["aux_api"]
+        emulator = full_bot_setup["emulator"]
+
+        bot.remove_help()
+
+        self.start_receiver(full_bot_setup["receiver_process"], full_bot_setup["receiver_webhook_url"])
+
+        bot_reply = self.invoke_bot(aux_api, emulator.bot_id, emulator.bot_displayname, "help", room_name="test1")
+        
+        assert bot_reply.text == "⚠️ Error: Command not found."
+
+    def test_fallback_failure_on_multiple(self, emulator_server):
+        """Tests that trying to set more than one fallback command fails"""
+
+        spark_api = self.get_spark_api(emulator_server)
+        bot = SparkBot(spark_api)
+
+        @bot.command(fallback=True)
+        def fallback():
+            return "This is the fallback command"
+
+        with pytest.raises(CommandSetupError):
+            @bot.command(fallback=True)
+            def second_fallback():
+                return "This isn't going to work."
+
     def test_receiver_incorrect_hmac(self, emulator_server, unique_port):
         """Tests that the receiver will reject a message with an incorrect signature"""
 
@@ -561,7 +609,7 @@ class TestAPI:
         spark_api = self.get_spark_api(emulator_server)
         bot = SparkBot(spark_api)
 
-        with pytest.raises(TypeError):
+        with pytest.raises(CommandSetupError):
             @bot.command("")
             def ping():
                 return "pong"
@@ -572,7 +620,7 @@ class TestAPI:
         spark_api = self.get_spark_api(emulator_server)
         bot = SparkBot(spark_api)
 
-        with pytest.raises(TypeError):
+        with pytest.raises(CommandSetupError):
             @bot.command
             def ping():
                 return "pong"
