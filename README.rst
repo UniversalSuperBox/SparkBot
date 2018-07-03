@@ -1,7 +1,7 @@
 SparkBot
 ========
 
-SparkBot makes it easy to create your own chatbot for Cisco Spark.
+SparkBot makes it easy to create your own chatbot for Cisco Webex Teams.
 
 It provides a low barrier to entry:
 

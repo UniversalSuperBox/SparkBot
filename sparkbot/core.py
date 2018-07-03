@@ -24,7 +24,7 @@ from logging import Logger
 from inspect import signature
 from os import environ
 import falcon
-from ciscosparkapi import CiscoSparkAPI, Webhook, Room
+from ciscosparkapi import CiscoSparkAPI, WebhookEvent, Room
 
 class SparkBot:
     """ A bot for Cisco Webex Teams
@@ -169,15 +169,18 @@ class SparkBot:
 
         return decorator
 
-    def commandworker(self, json_data):
-        """Called by the bottle app when a command comes in. Glues together the behavior of SparkBot.
+    def command_dispatcher(self, user_request):
+        """Executes a command for the user's request.
 
-        :param json_data: The blob of json that Spark POSTs to the webhook parsed into a dictionary
+        This method is called by the receiver when a command comes in. It uses the information in
+        the user_request to execute a command and send its reply back to the user.
+
+        :param user_request: Event where the user called the bot
+        :type user_request: ciscosparkapi.WebhookEvent
         """
 
-        webhook_obj = Webhook(json_data)
-        room_id = json_data["data"]["roomId"]
-        message = self.spark_api.messages.get(webhook_obj.data.id)
+        room_id = user_request.data.roomId
+        message = self.spark_api.messages.get(user_request.data.id)
         person = self.spark_api.people.get(message.personId)
 
         # Catch any errors in the shlex string
@@ -190,7 +193,7 @@ class SparkBot:
                                                 'with the message:', message.text]))
             errordescription = ' '.join(["⚠️Error: Please check the format of your command.",
                                          error.args[0]])
-            self.respond(room_id, errordescription)
+            self.send_message(room_id, errordescription)
             return
 
         # Remove my name from the beginning of the message if it's there
@@ -202,8 +205,8 @@ class SparkBot:
 
         # Catch generic Exception so that we always reply to the user.
         try:
-            usercommandresponse = self._executeuserfunction(userfunc_torun, commandline,
-                                                            webhook_obj, person, room_id)
+            usercommandresponse = self.execute_command(userfunc_torun, commandline,
+                                                       user_request, person, room_id)
         except Exception as error:
 
             # Build our logging string
@@ -223,10 +226,10 @@ class SparkBot:
 
         # finalresponse will be a Generator if the executed function contains the yield keyword.
         if isinstance(finalresponse, str):
-            self.respond(room_id, finalresponse)
+            self.send_message(room_id, finalresponse)
         elif isinstance(finalresponse, GeneratorType):
             for response in finalresponse:
-                self.respond(room_id, response)
+                self.send_message(room_id, response)
 
     def remove_help(self):
         """Removes the help command from the bot
@@ -237,29 +240,32 @@ class SparkBot:
         self.command_not_found_message = "Command not found."
         self.commands.pop("help", None)
 
-    def _executeuserfunction(self, func, commandline, event_json_dict, caller, room_id):
-        """Runs the bot user's specified command (found in func) if it exists.
+    def execute_command(self, command_str, commandline, event, caller, room_id):
+        """Runs the command given by 'command_str' if it exists.
 
-        :param func: The 'command' that the user wants to run. Should match a command string
-                     that has previously been added to the bot.
+        :param command_str: The 'command' that the user wants to run. Should match a command string
+                            that has previously been added to the bot.
+        :type command_str: str
 
         :param commandline: The user's complete message to the bot parsed into a list of tokens
                             by ``shlex.split()``.
+        :type commandline: list
 
-        :param event_json_dict: The blob of JSON that Spark gives us in the webhook, parsed into
-                                a ``dict``.
+        :param event: ciscosparkapi.WebhookEvent object describing the request causing this command.
+        :type event: ciscosparkapi.WebhookEvent
 
-        :param caller: The user who sent the message we're processing. Must be
-                       of type ciscosparkapi.Person.
+        :param caller: The user who sent the message we're processing.
+        :type caller: ciscosparkapi.Person
 
         :param room_id: The ID of the room that the message we're processing was sent in.
+        :type room_id: str
         """
 
         command_to_run = None
 
         # Try to find command in the commands dictionary
-        if func in self.commands:
-            command_to_run = self.commands[func]
+        if command_str in self.commands:
+            command_to_run = self.commands[command_str]
         elif self.fallback_command:
             command_to_run = self.fallback_command
         else:
@@ -268,18 +274,18 @@ class SparkBot:
         # To add a new argument for commands to use, have them sent into this function by
         # commandworker. Then, add them here and to the signature of Command.execute()
         return command_to_run.execute(commandline=commandline,
-                                      callback=self.respond,
-                                      event=event_json_dict,
+                                      callback=self.send_message,
+                                      event=event,
                                       caller=caller,
                                       room_id=room_id)
 
-    def respond(self, spark_room, markdown):
-        """Sends a message to a Spark room.
+    def send_message(self, spark_room, markdown):
+        """Sends a message to a Teams room.
 
         :param markdown: Markdown formatted string to send
 
         :param spark_room: The room that we should send this response to,
-            either CiscoSparkAPI.Room or str containing the room ID
+                           either CiscoSparkAPI.Room or str containing the room ID
 
         """
         if not markdown or not isinstance(markdown, str):

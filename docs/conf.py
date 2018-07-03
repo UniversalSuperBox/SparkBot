@@ -165,7 +165,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
     (master_doc, 'Sparkbot', 'Sparkbot Documentation',
-     author, 'Sparkbot', 'A simple chatbot for Cisco Spark.',
+     author, 'Sparkbot', 'A simple chatbot for Cisco Webex Teams.',
      'Miscellaneous'),
 ]
 

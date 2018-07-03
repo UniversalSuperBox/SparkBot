@@ -4,10 +4,10 @@ SparkBot API
 Submodules
 ----------
 
-sparkbot\.core module
-^^^^^^^^^^^^^^^^^^^^^
+SparkBot
+^^^^^^^^
 
-.. autoclass:: sparkbot.core.SparkBot
+.. autoclass:: sparkbot.SparkBot
     :members:
     :undoc-members:
     :show-inheritance:
@@ -15,14 +15,11 @@ sparkbot\.core module
 
     .. method:: my_help_all
 
-       Returns a markdown-formatted list of commands that this bot has. Command, meant to be called
-       by a bot user. Called by a user by typing "help", "help all", or "help-all".
+       Returns a markdown-formatted list of commands that this bot has. This function is used by the default "help" command to show the full list.
 
     .. method:: my_help(commandline)
 
-       Returns the help of the command given in ``commandline``. Command, meant to be called by a
-       bot user. Calls :func:`my_help_all()` if no command ("") is given or is ``all``. Called by
-       a user by typing ``help``.
+       Returns the help of the command given in ``commandline``. Calls :func:`my_help_all()` if no command is given or is ``all``. Called by a user by typing ``help``. This function is the default "help" command and can be removed using :meth:`remove_help()`.
 
 .. autoclass:: sparkbot.core.Command
     :members:

@@ -19,7 +19,7 @@ import json
 from random import SystemRandom
 import string
 import falcon
-from ciscosparkapi import CiscoSparkAPI
+from ciscosparkapi import CiscoSparkAPI, WebhookEvent
 
 class ReceiverResource(object):
 
@@ -66,7 +66,9 @@ class ReceiverResource(object):
             # Message was sent by me (bot); do not respond.
             return
 
-        bot_thread = Thread(target=self.bot.commandworker, args=(json_data,))
+        user_request = WebhookEvent(json_data)
+
+        bot_thread = Thread(target=self.bot.command_dispatcher, args=(user_request,))
         bot_thread.start()
 
         return

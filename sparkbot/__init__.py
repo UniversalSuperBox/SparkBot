@@ -1,4 +1,4 @@
-""" A chatbot base that makes it super easy to interface with Cisco Spark """
+"""A simple Python chatbot for Cisco Webex Teams"""
 
 # Copyright 2018 Dalton Durst
 #
