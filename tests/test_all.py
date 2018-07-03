@@ -237,7 +237,9 @@ class TestAPI:
         sleep(1)
 
         bot_replies = []
-        for i in range(0, timeout):
+
+        # Timeout*2 because we're sleeping for 0.5 seconds and incrementing i by 1 each time
+        for i in range(0, timeout*2):
 
             # Pull each message from the test room. If we match one that's already in bot_replies,
             # go on to the next one. Otherwise, if the reply came from the bot, store it.
@@ -249,7 +251,7 @@ class TestAPI:
             if len(bot_replies) == expected_replies or i >= timeout:
                 break
             else:
-                sleep(1)
+                sleep(0.5)
 
         # Order the replies by their send time
         bot_replies.sort(key=lambda r: r.created)
@@ -493,8 +495,34 @@ class TestAPI:
         self.start_receiver(full_bot_setup["receiver_process"], full_bot_setup["receiver_webhook_url"])
 
         bot_reply = self.invoke_bot(aux_api, emulator.bot_id, emulator.bot_displayname, "help", room_name="test1")
-        
+
         assert bot_reply.text == "⚠️ Error: Command not found."
+
+    def test_help_multiple_command_names(self, emulator_server):
+        """Tests the default help command's ability to group commands"""
+
+        # Since we've already tested help and help_all with the full setup, we
+        # only need to call the function on the bot directly.
+
+        spark_api = self.get_spark_api(emulator_server)
+        bot = SparkBot(spark_api)
+
+        @bot.command(["name1", "name2"])
+        def multiple_names():
+            pass
+
+        @bot.command("z")
+        def z_command():
+            pass
+
+        bot_reply = bot.my_help_all()
+
+        assert bot_reply == (
+"""Type `help [command]` for more specific help about any of these commands:
+ - help
+ - name1, name2
+ - z"""
+        )
 
     def test_fallback_failure_on_multiple(self, emulator_server):
         """Tests that trying to set more than one fallback command fails"""

@@ -74,6 +74,10 @@ class SparkBot:
         # Cache "me" to speed up commands requiring it
         self.me = self.spark_api.people.me()
 
+        # The output of the "help all" command should only need to be determined once.
+        # See self.my_help_all to learn more.
+        self._help_all_string = ""
+
         if not root_url:
             try:
                 root_url = environ["WEBHOOK_URL"]
@@ -121,10 +125,10 @@ class SparkBot:
                          "fallback command", used when the user requests a command that does not
                          exist.
         :type fallback: bool
-        
+
         :raises CommandSetupError: Arguments or combination of arguments was incorrect.
-                                   The error description will have more details.  
-        
+                                   The error description will have more details.
+
         :raises TypeError: Type of arguments was incorrect.
 
         """
@@ -154,7 +158,7 @@ class SparkBot:
             # Register new command object under each of its names
             if fallback:
                 self.fallback_command = new_command
-            else:    
+            else:
                 for command in names_to_register:
                     if not isinstance(command, str):
                         raise TypeError("non-str object found in command_strings.")
@@ -226,7 +230,7 @@ class SparkBot:
 
     def remove_help(self):
         """Removes the help command from the bot
-        
+
         This will remove the help command even if it has been overridden.
         """
 
@@ -318,17 +322,44 @@ class SparkBot:
 
     def my_help_all(self):
         """Returns a formatted list of all commands for this bot"""
-        command_list = []
 
-        for command in self.commands:
-            command_list.append(command)
+        # Create a formatted string containing all of our commands
+        # One command can have multiple names and therefore takes up multiple slots in the
+        # self.commands dict. However, for this help, we want multiple names for one command
+        # to be grouped together. In this process, we'll look at every command added to this bot
+        # and group together ones which are the same.
+        # We can't add or remove commands after the bot starts, so we can create this string once
+        if not self._help_all_string:
+            temp_command_list = []
+            used_command_string_list = []
 
-        sorted_commands = sorted(command_list)
+            # Iterate over all of our commands to obtain a list where multiple
+            # names for one command are in the same entry.
+            for command_string, command_object in self.commands.items():
 
-        output = ("Type `help [command]` for more specific help about any of these commands:\n - "
-                  + "\n - ".join(sorted_commands))
+                if command_string in used_command_string_list:
+                    continue
 
-        return output
+                used_command_string_list.append(command_string)
+                current_command_strings = [command_string]
+
+                # Iterate over the commands *again* and put any names for commands that
+                # match the one we're currently checking into current_command_strings
+                for inner_command_string, inner_command_object in self.commands.items():
+                    if inner_command_object == command_object and command_string != inner_command_string:
+                        used_command_string_list.append(inner_command_string)
+                        current_command_strings.append(inner_command_string)
+
+                temp_command_list.append(", ".join(sorted(current_command_strings)))
+
+            sorted_commands = sorted(temp_command_list)
+
+            output = ("Type `help [command]` for more specific help about any of these commands:\n - "
+                    + "\n - ".join(sorted_commands))
+
+            self._help_all_string = output
+
+        return self._help_all_string
 
 class Command:
     """ Represents a command that can be executed by a SparkBot
