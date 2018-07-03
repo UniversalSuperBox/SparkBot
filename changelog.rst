@@ -1,6 +1,11 @@
 Changelog
 =========
 
+0.3.1
+-----
+
+Group commands with multiple names in help-all
+
 0.3.0
 -----
 
