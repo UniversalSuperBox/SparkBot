@@ -108,10 +108,77 @@ jobs:
             . venv/bin/activate
             pytest
 
+  release:
+    docker:
+      - image: circleci/python:3.6.5
+
+    working_directory: ~/repo
+
+    steps:
+      - checkout
+
+      - restore_cache:
+          keys:
+          - v1-dependencies-{{ checksum "requirements.txt" }}
+          - v1-dependencies-
+
+      - run:
+          name: install dependencies
+          command: |
+            # Our tests require node
+            curl -sL https://deb.nodesource.com/setup_8.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+
+            python3 -m venv venv
+            . venv/bin/activate
+            pip install -e .[dev]
+
+      - save_cache:
+          paths:
+            - ./venv
+          key: v1-dependencies-{{ checksum "requirements.txt" }}
+
+      - run:
+          name: Verify build
+          command: |
+            python setup.py verify
+
+      - run:
+          name: init .pypirc
+          command: |
+            echo -e "[pypi]" >> ~/.pypirc
+            echo -e "username = UniversalSuperBox" >> ~/.pypirc
+            echo -e "password = $PYPI_PASSWORD" >> ~/.pypirc
+
+
+      - run:
+        name: Build package
+        command: |
+          . venv/bin/activate
+          python setup.py sdist
+          python setup.py bdist_wheel
+
+      - run:
+          name: upload to pypi
+          command: |
+            . venv/bin/activate
+            twine upload dist/*
+
+
 workflows:
   version: 2
-  test_all:
+  test_and_maybe_deploy:
     jobs:
       - three-five
       - three-six
       - three-seven
+      - release
+        requires:
+          - three-five
+          - three-six
+          - three-seven
+        filters:
+          tags:
+            only: /[0-9]+(\.[0-9]+)*/
+          branches:
+            ignore: /.*/
