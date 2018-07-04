@@ -13,17 +13,14 @@
 # limitations under the License.
 
 import logging
-from logging.config import fileConfig
-import os
-import sparkbot
-from sparkbot import receiver, commandhelpers
+from sparkbot import SparkBot
 from ciscosparkapi import CiscoSparkAPI
 
 LOGGER = logging.getLogger('sparkbot')
 
 # Initialize the environment
 spark_api = CiscoSparkAPI()
-bot = sparkbot.SparkBot(spark_api, logger=LOGGER)
+bot = SparkBot(spark_api, logger=LOGGER)
 
 # Add commands here
 @bot.command("ping")
@@ -34,7 +31,4 @@ def ping(caller, room_id):
     Returns **pong**.
     """
 
-    if commandhelpers.is_group(spark_api, room_id):
-        return '{}, **pong**'.format(commandhelpers.mention_person(caller))
-    else:
-        return '**pong**'
+    return '**pong**'
