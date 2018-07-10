@@ -2,7 +2,7 @@ version: 2
 jobs:
   three-five:
     docker:
-      - image: circleci/python:3.5.4
+      - image: circleci/python:3.5.5
 
     working_directory: ~/repo
 
@@ -38,7 +38,7 @@ jobs:
 
   three-six:
     docker:
-      - image: circleci/python:3.6.5
+      - image: circleci/python:3.6.6
 
     working_directory: ~/repo
 
@@ -74,7 +74,7 @@ jobs:
 
   three-seven:
     docker:
-      - image: circleci/python:3.7.0b5
+      - image: circleci/python:3.7.0
 
     working_directory: ~/repo
 
@@ -172,6 +172,7 @@ workflows:
       - three-five
       - three-six
       - three-seven
+<<<<<<< HEAD
       - release
         requires:
           - three-five
@@ -182,3 +183,5 @@ workflows:
             only: /[0-9]+(\.[0-9]+)*/
           branches:
             ignore: /.*/
+=======
+>>>>>>> 2521ee49fd4c0a18c8ba0d92f5e3fd14658d874d
