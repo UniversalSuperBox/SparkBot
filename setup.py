@@ -1,5 +1,6 @@
 # Always prefer setuptools over distutils
-from setuptools import setup, find_packages, install
+from setuptools import setup, find_packages
+from setuptools.command.install import install
 # To use a consistent encoding
 from codecs import open
 from os import path, getenv

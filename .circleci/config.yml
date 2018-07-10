@@ -108,9 +108,9 @@ jobs:
             . venv/bin/activate
             pytest
 
-  release:
+  deploy:
     docker:
-      - image: circleci/python:3.6.5
+      - image: circleci/python:3.6.6
 
     working_directory: ~/repo
 
@@ -139,31 +139,30 @@ jobs:
           key: v1-dependencies-{{ checksum "requirements.txt" }}
 
       - run:
-          name: Verify build
+          name: verify git tag
           command: |
+            . venv/bin/activate
             python setup.py verify
 
       - run:
           name: init .pypirc
           command: |
             echo -e "[pypi]" >> ~/.pypirc
-            echo -e "username = UniversalSuperBox" >> ~/.pypirc
+            echo -e "username = levlaz" >> ~/.pypirc
             echo -e "password = $PYPI_PASSWORD" >> ~/.pypirc
 
-
       - run:
-        name: Build package
-        command: |
-          . venv/bin/activate
-          python setup.py sdist
-          python setup.py bdist_wheel
+          name: create package
+          command: |
+            . venv/bin/activate
+            python setup.py sdist
+            python setup.py bdist_wheel
 
       - run:
           name: upload to pypi
           command: |
             . venv/bin/activate
             twine upload dist/*
-
 
 workflows:
   version: 2
@@ -172,16 +171,13 @@ workflows:
       - three-five
       - three-six
       - three-seven
-<<<<<<< HEAD
-      - release
-        requires:
-          - three-five
-          - three-six
-          - three-seven
-        filters:
-          tags:
-            only: /[0-9]+(\.[0-9]+)*/
-          branches:
-            ignore: /.*/
-=======
->>>>>>> 2521ee49fd4c0a18c8ba0d92f5e3fd14658d874d
+      - deploy:
+          requires:
+            - three-five
+            - three-six
+            - three-seven
+          filters:
+            tags:
+              only: /[0-9]+(\.[0-9]+)*/
+            branches:
+              ignore: /.*/
