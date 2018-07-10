@@ -10,6 +10,7 @@ from sparkbot import SparkBot, receiver
 from sparkbot.exceptions import CommandSetupError
 from wsgiref import simple_server
 import requests
+from ast import literal_eval
 from requests.exceptions import ConnectionError
 from ciscosparkapi import CiscoSparkAPI
 
@@ -285,10 +286,10 @@ class TestAPI:
         bot = SparkBot(spark_api)
 
         @bot.command("ping")
-        def ping(caller, room_id):
+        def ping():
             return 'pong'
 
-        assert bot.commands["ping"].execute() == "pong"
+        assert bot.execute_command("ping") == "pong"
 
     def test_callback(self, emulator_server):
         """Tests the bot's ability to give a callback function"""
@@ -297,15 +298,71 @@ class TestAPI:
         bot = SparkBot(spark_api)
         room_id = "ASDF1234"
 
-        temp_respond = mock.MagicMock()
+        temp_send_message = mock.MagicMock()
+        bot.send_message = temp_send_message
 
         @bot.command("callback")
         def callingback(callback):
             callback("Some markdown")
 
-        bot.commands["callback"].execute(room_id=room_id, callback=temp_respond)
+        bot.execute_command("callback", room_id=room_id)
 
-        assert temp_respond.called_with(room_id, "Some markdown")
+        assert temp_send_message.called_with(room_id, "Some markdown")
+
+    def test_arg_passing(self, emulator_server):
+        """Tests that arguments are passed to commands as expected"""
+
+        spark_api = self.get_spark_api(emulator_server)
+        bot = SparkBot(spark_api)
+
+        temp_commandline = mock.MagicMock()
+        temp_event = mock.MagicMock()
+        temp_caller = mock.MagicMock()
+        temp_room_id = mock.MagicMock()
+
+        @bot.command("arguments")
+        def arguments(commandline, event, caller, room_id):
+            return (commandline, event, caller, room_id)
+
+        execution = bot.execute_command("arguments", commandline=temp_commandline,
+                                        event=temp_event,
+                                        caller=temp_caller,
+                                        room_id=temp_room_id)
+
+        assert execution == (temp_commandline, temp_event, temp_caller, temp_room_id)
+
+    def test_full_arg_passing(self, full_bot_setup):
+        """Tests that arguments are passed to commands as expected (now with the emulator).
+
+        This ensures that the command_dispatcher is working correctly.
+        """
+
+        bot = full_bot_setup["bot"]
+        aux_api = full_bot_setup["aux_api"]
+        emulator = full_bot_setup["emulator"]
+
+        @bot.command("arguments")
+        def arguments(commandline, event, caller, room_id):
+            return (str({"commandline": commandline,
+                    "eventEmail": event.data.personEmail,
+                    "callerEmail": caller.emails[0],
+                    "eventRoom": event.data.roomId,
+                    "argRoom": room_id}))
+
+        self.start_receiver(full_bot_setup["receiver_process"], full_bot_setup["receiver_webhook_url"])
+
+        bot_reply = self.invoke_bot(full_bot_setup["aux_api"],
+                                    emulator.bot_id,
+                                    emulator.bot_displayname,
+                                    "arguments")
+
+        reply_contents_dict = literal_eval(bot_reply.text)
+
+        # Only the ['arguments'] needs to be literal. The event and caller have their
+        # email in common. The event's room and the 'room_id' argument should also be the same
+        assert reply_contents_dict["commandline"] == ['arguments']
+        assert reply_contents_dict["eventEmail"] == reply_contents_dict["callerEmail"]
+        assert reply_contents_dict["eventRoom"] == reply_contents_dict["argRoom"]
 
     def test_full_nocommand(self, full_bot_setup):
         """Tests the bot's error handling when an incorrect command is given"""

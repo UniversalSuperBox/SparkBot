@@ -65,7 +65,7 @@ class SparkBot:
             self._logger = None
 
         self.commands = {}
-        self.commands["help"] = Command(self.my_help)
+        self.commands["help"] = self.my_help
         self.fallback_command = None
 
         # Message sent to user when they request a command that doesn't exist.
@@ -117,8 +117,7 @@ class SparkBot:
                                 they call the decorated function. Pass a single string for a single
                                 command name. Pass a list of strings to give a command multiple
                                 names.
-        :type command_strings: list
-        :type command_strings: str
+        :type command_strings: list or str
 
 
         :param fallback: False by default, not required. If True, sets this command as a
@@ -149,7 +148,7 @@ class SparkBot:
             if not isinstance(fallback, bool):
                 raise TypeError("fallback not a boolean in call to SparkBot.command. Do you have too many arguments in your decorator?")
 
-            new_command = Command(function)
+            new_command = function
 
             if self.fallback_command:
                 # There is already a fallback command
@@ -173,7 +172,8 @@ class SparkBot:
         """Executes a command for the user's request.
 
         This method is called by the receiver when a command comes in. It uses the information in
-        the user_request to execute a command and send its reply back to the user.
+        the user_request to execute a command (using :meth:`execute_command`) and send its reply
+        back to the user.
 
         :param user_request: Event where the user called the bot
         :type user_request: ciscosparkapi.WebhookEvent
@@ -205,8 +205,11 @@ class SparkBot:
 
         # Catch generic Exception so that we always reply to the user.
         try:
-            usercommandresponse = self.execute_command(userfunc_torun, commandline,
-                                                       user_request, person, room_id)
+            usercommandresponse = self.execute_command(userfunc_torun,
+                                                       commandline=commandline,
+                                                       event=user_request,
+                                                       caller=person,
+                                                       room_id=room_id)
         except Exception as error:
 
             # Build our logging string
@@ -240,8 +243,13 @@ class SparkBot:
         self.command_not_found_message = "Command not found."
         self.commands.pop("help", None)
 
-    def execute_command(self, command_str, commandline, event, caller, room_id):
-        """Runs the command given by 'command_str' if it exists.
+    def execute_command(self, command_str, **kwargs):
+        """Runs the command given by 'command_str' if it exists with the possible arguments in ``**kwargs``.
+
+        Note that execute_command is "dumb". It does not enforce the return type of a command
+        function. It will happily return anything that the bot writer's command does. Contrast to
+        :meth:`command_dispatcher` which checks whether a command (executed by this function)
+        returns either a Generator or a str.
 
         :param command_str: The 'command' that the user wants to run. Should match a command string
                             that has previously been added to the bot.
@@ -259,6 +267,17 @@ class SparkBot:
 
         :param room_id: The ID of the room that the message we're processing was sent in.
         :type room_id: str
+
+        :Keyword Arguments:
+            Each keyword argument sent here will be used as a possible argument for commands. For
+            example, the keyword argument ``commandline=`` will allow a command function (the ones
+            defined with :meth:`command`) to take an argument by the name ``commandline``.
+            The current list can be found at :ref:`recognized-keywords`.
+
+            If a logger is defined, SparkBot will raise a warning if an argument is requested
+            but not provided by the ``kwargs`` given to this function. This means that there is
+            either a typo in the argument on the command function or :meth:`command_dispatcher` has
+            failed to do its job correctly (the first is more likely).
         """
 
         command_to_run = None
@@ -271,13 +290,30 @@ class SparkBot:
         else:
             raise CommandNotFound('No command found', self.command_not_found_message)
 
-        # To add a new argument for commands to use, have them sent into this function by
-        # commandworker. Then, add them here and to the signature of Command.execute()
-        return command_to_run.execute(commandline=commandline,
-                                      callback=self.send_message,
-                                      event=event,
-                                      caller=caller,
-                                      room_id=room_id)
+        possible_parameters = kwargs
+        possible_parameters["callback"] = None
+
+        function_parameters = signature(command_to_run).parameters
+
+        for parameter in function_parameters.keys():
+            if parameter not in possible_parameters:
+                if self._logger:
+                    self._logger.warn(("Parameter ", parameter, " requested by function ",
+                                       command_str, " but not found internally. None will be ",
+                                       "passed to this parameter. Check the Writing Commands ",
+                                       "document for a list of supported keywords."))
+                    possible_parameters[parameter] = None
+
+        parameters_to_pass = {}
+        for parameter, value in possible_parameters.items():
+            if parameter in list(function_parameters.keys()):
+                parameters_to_pass[parameter] = value
+
+        # Only create the callback function if it's needed
+        if "callback" in parameters_to_pass:
+            parameters_to_pass["callback"] = self.create_callback(self.send_message, kwargs["room_id"])
+
+        return command_to_run(**parameters_to_pass)
 
     def send_message(self, spark_room, markdown):
         """Sends a message to a Teams room.
@@ -295,6 +331,22 @@ class SparkBot:
             self.spark_api.messages.create(spark_room.id, markdown=markdown)
         if isinstance(spark_room, str):
             self.spark_api.messages.create(spark_room, markdown=markdown)
+
+    def create_callback(self, respond, room_id):
+        """ Pre-fills room ID in the function given by ``respond``
+
+        Adds the room ID as the first argument of the function given in ``respond``, simplifying the
+        'callback' experience for bot developers.
+
+        :param respond: The method to add the room ID to
+
+        :param room_id: The ID of the room to preset in ``respond``
+        """
+
+        callback = functools.partial(respond, room_id)
+        callback.__doc__ = ("SparkBot.respond method with room_id pre-filled, call this with ",
+                            "the message you would like to reply inside the called room with.")
+        return callback
 
     def my_help(self, commandline):
         """
@@ -366,70 +418,3 @@ class SparkBot:
             self._help_all_string = output
 
         return self._help_all_string
-
-class Command:
-    """ Represents a command that can be executed by a SparkBot
-
-    :param function: The function that this command will execute. Must return a str.
-    """
-
-    def __init__(self, function):
-        self.function = function
-
-    @classmethod
-    def create_callback(self, respond, room_id):
-        """ Pre-fills room ID in the function given by ``respond``
-
-        Adds the room ID as the first argument of the function given in ``respond``, simplifying the
-        'callback' experience for bot developers.
-
-        :param respond: The method to add the room ID to
-
-        :param room_id: The ID of the room to preset in ``respond``
-        """
-
-        callback = functools.partial(respond, room_id)
-        callback.__doc__ = ("SparkBot.respond method with room_id pre-filled, call this with ",
-                            "the message you would like to reply inside the called room with.")
-        return callback
-
-
-    def execute(self, commandline=None, event=None, caller=None, callback=None, room_id=None):
-        """ Executes this command's ``function``
-
-        Executes this Command's target function using the given parameters as needed. All
-        parameters are required for normal function, named parameters are used for ease of
-        understanding of the written code.
-
-        :param commandline: ``shlex.split()``-processed list of tokens which make up the bot user's
-                            message
-
-        :param event: The webhook event that was sent to us by Webex Teams
-
-        :param caller: The Person who pinged the bot to start this process
-
-        :type caller: ciscosparkapi.Person
-
-        :param callback: Function to be used as a callback. :func:`Command.create_callback()` is
-                         used to turn this into a partial function, so the first argument of this
-                         function must be a Spark room ID that the bot author will expect to act on.
-
-        :param room_id: The ID of the room that the bot was called in
-
-        :returns: str,  the desired reply to the bot user
-
-        """
-
-        possible_parameters = locals()
-
-        function_parameters = signature(self.function).parameters
-        parameters_to_pass = {}
-        for parameter, value in possible_parameters.items():
-            if parameter in list(function_parameters.keys()):
-                parameters_to_pass[parameter] = value
-
-        # Only create the callback function if it's needed
-        if "callback" in parameters_to_pass:
-            parameters_to_pass["callback"] = self.create_callback(callback, room_id)
-
-        return self.function(**parameters_to_pass)

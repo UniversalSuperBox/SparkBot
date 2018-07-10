@@ -183,7 +183,7 @@ If you'd prefer to remove the help command altogether, you can do so by calling 
     Similar to adding commands, removing commands must be performed before the bot has started. It is not possible to remove help "in-flight", such as from another command.
 
 "Command not found"
-^^^^^^^^^^^^^^^^^^^ 
+^^^^^^^^^^^^^^^^^^^
 
 By default, when the user tries to use a command that doesn't exist, they get an error:
 
@@ -200,6 +200,8 @@ You can add a command as a fallback by omitting its command strings and adding t
 
 .. figure:: /_static/writing-commands/SparkBot-wc-override-nocommand.PNG
    :alt: Overridden "Command not found" behavior
+
+.. _recognized-keywords:
 
 List of recognized keywords
 ---------------------------
