@@ -1,11 +1,10 @@
-SparkBot API
-============
+API Documentation
+=================
 
-Submodules
-----------
+This page contains information about SparkBot's internals. Bot authors may not find it terribly useful, SparkBot hackers will.
 
 SparkBot
-^^^^^^^^
+--------
 
 .. autoclass:: sparkbot.SparkBot
     :members:
@@ -19,33 +18,14 @@ SparkBot
 
     .. method:: my_help(commandline)
 
-       Returns the help of the command given in ``commandline``. Calls :func:`my_help_all()` if no command is given or is ``all``. Called by a user by typing ``help``. This function is the default "help" command and can be removed using :meth:`remove_help()`.
+       Returns the help of the command given in ``commandline``. Calls :meth:`my_help_all()` if no command is given or is ``all``. Called by a user by typing ``help``. This function is the default "help" command and can be removed using :meth:`remove_help()`.
 
-.. autoclass:: sparkbot.core.Command
-    :members:
-    :undoc-members:
-    :show-inheritance:
+Default receiver
+----------------
 
-sparkbot\.receiver module
-^^^^^^^^^^^^^^^^^^^^^^^^^
+The receiver waits for a request from Webex Teams and executes :meth:`sparkbot.SparkBot.command_dispatcher` when one comes in.
 
 .. automodule:: sparkbot.receiver
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-sparkbot\.commandhelpers module
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. automodule:: sparkbot.commandhelpers
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: sparkbot
     :members:
     :undoc-members:
     :show-inheritance:
