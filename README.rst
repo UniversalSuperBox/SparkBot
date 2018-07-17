@@ -24,8 +24,8 @@ SparkBot is Simple
 
 SparkBot provides a simple way to interface with Webex Teams. Its purpose is to take you from zero to talking on Teams as quickly as possible. You'll need to provide an HTTPS endpoint using your software of choice, then you're off to the races.
 
-SparkBot has exactly what you need
-----------------------------------
+SparkBot has everything you need
+--------------------------------
 
 SparkBot includes its own request dispatcher which takes your users' messages and routes them into the correct commands. It does this by parsing their message like a shell processor. You can choose to take as much or as little information about the request as you need for each command.
 
@@ -33,8 +33,8 @@ SparkBot also includes a default "help" command to list its available commands a
 
 Oh, and if you don't want any of that, you can get rid of it all and do it yourself.
 
-SparkBot gets out of your way
------------------------------
+And nothing you don't
+---------------------
 
 SparkBot isn't integrated with a machine learning platform, stuffed into a natural language processing framework, and bundled into a cloud provider. It isn't going to try to wrangle you into a hosting contract or keep you locked in to any vendor. No commitments or learning curves.
 
