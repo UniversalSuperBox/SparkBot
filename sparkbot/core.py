@@ -47,9 +47,15 @@ class SparkBot:
 
     :param logger: Logger that the bot will output to
     :type logger: logging.Logger
+
+    :param skip_receiver_setup: Set to "all" or "webhook" to skip setting up a receiver when
+                                instancing SparkBot. "all" skips creating the receiver and the
+                                webhook. "webhook" creates a receiver but does not register a
+                                webhook with Webex Teams.
+    :type skip_receiver_setup: "all", "webhook"
     """
 
-    def __init__(self, spark_api, root_url=None, logger=None):
+    def __init__(self, spark_api, root_url=None, logger=None, skip_receiver_setup=None):
 
         if isinstance(spark_api, CiscoSparkAPI):
             self.spark_api = spark_api
@@ -78,20 +84,31 @@ class SparkBot:
         # See self.my_help_all to learn more.
         self._help_all_string = ""
 
+        if skip_receiver_setup == "all":
+            self.receiver = None
+            return
+        # Put any logic that "sets up" a receiver but not a webhook after this point
+
+        # Create my receiver
+        self.receiver = receiver.create(self)
+
+        if skip_receiver_setup == "webhook":
+            self.webhook_secret = None
+            return
+        # Put any logic that sets up a webhook after this point
+
+        self.webhook_secret = receiver.random_bytes(32)
+
         if not root_url:
             try:
                 root_url = environ["WEBHOOK_URL"]
             except KeyError:
                 if self._logger:
                     self._logger.warn(("SparkBot instanced without a webhook URL argument. This is "
-                                       "done in the test suite, but is generally not advisable for "
-                                       "normal use."))
+                                        "done in the test suite, but is generally not advisable for "
+                                        "normal use."))
         elif not isinstance(root_url, str):
             raise TypeError("root_url is not of type str")
-
-        # Create my receiver
-        self.webhook_secret = receiver.random_bytes(32)
-        self.receiver = receiver.create(self)
 
         # Create my webhook
         if root_url:
@@ -99,16 +116,16 @@ class SparkBot:
             if root_url.startswith("http:"):
                 if self._logger:
                     self._logger.warn(("Creating SparkBot with http-only webhook. This is not "
-                                       "recommended. Please use an HTTPS webhook to better secure "
-                                       "your users' data."))
+                                    "recommended. Please use an HTTPS webhook to better secure "
+                                    "your users' data."))
 
             for webhook in self.spark_api.webhooks.list():
                 self.spark_api.webhooks.delete(webhook.id)
             self.spark_api.webhooks.create("myBot",
-                                           root_url + "/sparkbot",
-                                           "messages",
-                                           "created",
-                                           secret=self.webhook_secret.decode())
+                                        root_url + "/sparkbot",
+                                        "messages",
+                                        "created",
+                                        secret=self.webhook_secret.decode())
 
     def command(self, command_strings=[], fallback=False):
         """ Decorator that adds a command to this bot.

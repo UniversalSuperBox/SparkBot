@@ -13,6 +13,7 @@ import requests
 from ast import literal_eval
 from requests.exceptions import ConnectionError
 from ciscosparkapi import CiscoSparkAPI
+import falcon
 
 class TestAPI:
 
@@ -279,7 +280,6 @@ class TestAPI:
 
     def test_add_command(self, emulator_server):
         """Tests use of the @SparkBot.command() decorator to add a command to the bot"""
-        from sparkbot import SparkBot
 
         spark_api = self.get_spark_api(emulator_server)
 
@@ -330,6 +330,26 @@ class TestAPI:
                                         room_id=temp_room_id)
 
         assert execution == (temp_commandline, temp_event, temp_caller, temp_room_id)
+
+    def test_skip_receiver_all(self, emulator_server):
+        """Tests that it is possible to skip "all" to prevent receiver setup """
+
+        spark_api = self.get_spark_api(emulator_server)
+        spark_api.webhooks = mock.MagicMock()
+        bot = SparkBot(spark_api, skip_receiver_setup="all")
+
+        assert bot.receiver == None
+        assert not spark_api.webhooks.list.called
+
+    def test_skip_receiver_webhook(self, emulator_server):
+        """Tests that it is possible to skip "webhook" to prevent webhook setup """
+
+        spark_api = self.get_spark_api(emulator_server)
+        spark_api.webhooks = mock.MagicMock()
+        bot = SparkBot(spark_api, skip_receiver_setup="webhook")
+
+        assert isinstance(bot.receiver, falcon.API)
+        assert not spark_api.webhooks.list.called
 
     def test_full_arg_passing(self, full_bot_setup):
         """Tests that arguments are passed to commands as expected (now with the emulator).
