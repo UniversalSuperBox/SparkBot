@@ -20,7 +20,7 @@ SparkBot provides a very simple interface for writing commands. You will be fami
 
 Let's break down what's happening here line-by-line.
 
-First, we have the decorator, :func:`sparkbot.core.SparkBot.command`, which marks this function as a command for our bot:
+First, we have the decorator, :meth:`sparkbot.core.SparkBot.command`, which marks this function as a command for our bot:
 
 .. code-block:: python
 
@@ -99,7 +99,7 @@ Let's go over this line-by-line:
     @MY_BOT.command("testcommand")
     def testcommand(commandline):
 
-As usual, we use the :func:`sparkbot.core.SparkBot.command` decorator to add this function to our bot's list of commands. However, notice that we defined the function to take the argument ``commandline``. This is one of several keywords that SparkBot recognizes. When executing your function, it will find this keyword and send the ``commandline`` property accordingly.
+As usual, we use the :meth:`sparkbot.core.SparkBot.command` decorator to add this function to our bot's list of commands. However, notice that we defined the function to take the argument ``commandline``. This is one of several keywords that SparkBot recognizes. When executing your function, it will find this keyword and send the ``commandline`` property accordingly.
 
 When the user types ``testcommand some cool stuff``, this code receives the following list as its ``commandline`` argument::
 
@@ -109,7 +109,7 @@ Whereas ``testcommand "some cool" stuff`` will yield the following::
 
     ['testcommand', 'some cool', 'stuff']
 
-Using a helper function, :func:`sparkbot.commandhelpers.minargs`, we check to make sure we have at least one argument (token) in the commandline. Then, we return either the first token if there is one or more, or an error if there are no tokens::
+Using a helper function, :meth:`sparkbot.commandhelpers.minargs`, we check to make sure we have at least one argument (token) in the commandline. Then, we return either the first token if there is one or more, or an error if there are no tokens::
 
     if commandhelpers.minargs(1, commandline):
         return commandline[1]
@@ -176,7 +176,7 @@ If you want to do something different when your user asks for help, you can add 
 Remove
 """"""
 
-If you'd prefer to remove the help command altogether, you can do so by calling :func:`SparkBot.remove_help() <sparkbot.core.SparkBot.remove_help>`.
+If you'd prefer to remove the help command altogether, you can do so by calling :meth:`SparkBot.remove_help() <sparkbot.core.SparkBot.remove_help>`.
 
 .. note::
 

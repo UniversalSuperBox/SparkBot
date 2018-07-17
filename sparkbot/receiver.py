@@ -19,13 +19,18 @@ import json
 from random import SystemRandom
 import string
 import falcon
-from ciscosparkapi import CiscoSparkAPI, WebhookEvent
+from ciscosparkapi import CiscoSparkAPI, WebhookEvent, Room
+from logging import Logger
+import shlex
+from types import GeneratorType
+import functools
 
 class ReceiverResource(object):
 
-    def __init__(self, bot):
+    def __init__(self, bot, teams_api):
         self.bot = bot
         self.me = self.bot.spark_api.people.me()
+        self.teams_api = teams_api
 
     def on_post(self, req, resp):
         """Receives messages and passes them to the sparkbot instance in BOT_INSTANCE"""
@@ -68,12 +73,12 @@ class ReceiverResource(object):
 
         user_request = WebhookEvent(json_data)
 
-        bot_thread = Thread(target=self.bot.command_dispatcher, args=(user_request,))
+        bot_thread = Thread(target=command_dispatcher, args=(self.bot, self.teams_api, user_request,))
         bot_thread.start()
 
         return
 
-def create(bot):
+def create(bot, teams_api):
     """Creates a falcon.API instance with the required behavior for a SparkBot receiver.
 
     Currently the API webhook path is hard-coded to ``/sparkbot``
@@ -82,7 +87,7 @@ def create(bot):
     """
 
     api = falcon.API()
-    api_behavior = ReceiverResource(bot)
+    api_behavior = ReceiverResource(bot, teams_api)
     api.add_route("/sparkbot", api_behavior)
 
     return api
@@ -94,3 +99,67 @@ def random_bytes(length):
     my_random_bytes = my_random_string.encode(encoding='utf_8')
 
     return my_random_bytes
+
+def command_dispatcher(bot, user_request):
+    """Executes a command on SparkBot ``bot`` for the user's request.
+
+    This method is called by the receiver when a command comes in. It uses the information in
+    the user_request to execute a command (using :meth:`execute_command`) and send its reply
+    back to the user.
+
+    :param bot: Bot which will execute this command
+    :type bot: sparkbot.SparkBot
+
+    :param user_request: Event where the user called the bot
+    :type user_request: ciscosparkapi.WebhookEvent
+    """
+
+    room_id = user_request.data.roomId
+    message = bot.spark_api.messages.get(user_request.data.id)
+    caller = bot.spark_api.people.get(message.personId)
+
+    # Catch any errors in the shlex string
+    try:
+        commandline = shlex.split(message.text)
+    except ValueError as error:
+        # Something is incorrect in the user's command string
+        if isinstance(bot._logger, Logger):
+            bot._logger.exception(' '.join([caller.emails[0], 'caused:', error.args[0],
+                                            'with the message:', message.text]))
+        response = ' '.join(["⚠️Error: Please check the format of your command.",
+                                        error.args[0]])
+        #TODO: Send a spark message here with response
+
+    # Remove my name from the beginning of the message if it's there
+    my_name = bot.me.displayName
+    if commandline[0] == my_name:
+        del commandline[0]
+
+    userfunc_torun = str.lower(commandline[0])
+
+
+    response = bot.execute_command(userfunc_torun, commandline=commandline,
+                                   event=user_request, caller=caller, room_id=room_id)
+
+    if isinstance(response, str):
+        callback(response)
+    elif isinstance(response, GeneratorType):
+        for response in response:
+            callback(response)
+
+def send_spark_message(api, spark_room, markdown):
+    """Sends a message to a Teams room.
+
+    :param markdown: Markdown formatted string to send
+
+    :param spark_room: The room that we should send this response to
+    :type spark_room: ciscosparkapi.Room or str
+
+    """
+    if not markdown or not isinstance(markdown, str):
+        raise ValueError("response must be a non-blank string.")
+
+    if isinstance(spark_room, Room):
+        api.messages.create(spark_room.id, markdown=markdown)
+    if isinstance(spark_room, str):
+        api.messages.create(spark_room, markdown=markdown)

@@ -29,3 +29,11 @@ The receiver waits for a request from Webex Teams and executes :meth:`sparkbot.S
     :members:
     :undoc-members:
     :show-inheritance:
+
+Exceptions
+----------
+
+.. automodule:: sparkbot.exceptions
+    :members:
+    :undoc-members:
+    :show-inheritance:

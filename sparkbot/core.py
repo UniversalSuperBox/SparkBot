@@ -19,7 +19,7 @@ from . import receiver
 import shlex
 import textwrap
 import functools
-from types import FunctionType, GeneratorType
+from types import FunctionType
 from logging import Logger
 from inspect import signature
 from os import environ
@@ -34,7 +34,7 @@ class SparkBot:
     environment to know its public URL.
 
     SparkBot has a ``help`` command built in by default. These may be overridden using the
-    :func:`command` decorator and providing the "help" argument and a function with your desired
+    :meth:`command` decorator and providing the "help" argument and a function with your desired
     behavior on calling ``help``. See :doc:`Writing Commands </writing-commands>` for more
     information on writing commands.
 
@@ -128,7 +128,7 @@ class SparkBot:
                                         secret=self.webhook_secret.decode())
 
     def command(self, command_strings=[], fallback=False):
-        """ Decorator that adds a command to this bot.
+        """ Decorator that registers a command function into a SparkBot instance.
 
         :param command_strings: Callable name(s) of command. When a bot user types this (these),
                                 they call the decorated function. Pass a single string for a single
@@ -146,6 +146,11 @@ class SparkBot:
                                    The error description will have more details.
 
         :raises TypeError: Type of arguments was incorrect.
+
+        .. note::
+
+            When using the default receiver, commands may not be added or removed from the bot after
+            the receiver starts.
 
         """
 
@@ -185,88 +190,27 @@ class SparkBot:
 
         return decorator
 
-    def command_dispatcher(self, user_request):
-        """Executes a command for the user's request.
-
-        This method is called by the receiver when a command comes in. It uses the information in
-        the user_request to execute a command (using :meth:`execute_command`) and send its reply
-        back to the user.
-
-        :param user_request: Event where the user called the bot
-        :type user_request: ciscosparkapi.WebhookEvent
-        """
-
-        room_id = user_request.data.roomId
-        message = self.spark_api.messages.get(user_request.data.id)
-        person = self.spark_api.people.get(message.personId)
-
-        # Catch any errors in the shlex string
-        try:
-            commandline = shlex.split(message.text)
-        except ValueError as error:
-            # Something is incorrect in the user's command string
-            if isinstance(self._logger, Logger):
-                self._logger.exception(' '.join([person.emails[0], 'caused:', error.args[0],
-                                                'with the message:', message.text]))
-            errordescription = ' '.join(["⚠️Error: Please check the format of your command.",
-                                         error.args[0]])
-            self.send_message(room_id, errordescription)
-            return
-
-        # Remove my name from the beginning of the message if it's there
-        my_name = self.me.displayName
-        if commandline[0] == my_name:
-            del commandline[0]
-
-        userfunc_torun = str.lower(commandline[0])
-
-        # Catch generic Exception so that we always reply to the user.
-        try:
-            usercommandresponse = self.execute_command(userfunc_torun,
-                                                       commandline=commandline,
-                                                       event=user_request,
-                                                       caller=person,
-                                                       room_id=room_id)
-        except Exception as error:
-
-            # Build our logging string
-            if isinstance(self._logger, Logger):
-                self._logger.exception(' '.join([person.emails[0], 'caused:', type(error).__name__,
-                                                error.args[0], 'with the command:', message.text]))
-            try:
-                errordescription = error.args[1]
-            except IndexError:
-                errordescription = ("Something happened internally. "
-                                    "For more information, contact the bot author.")
-            # Make response
-            finalresponse = " ".join(["⚠️ Error:", errordescription])
-
-        else:
-            finalresponse = usercommandresponse
-
-        # finalresponse will be a Generator if the executed function contains the yield keyword.
-        if isinstance(finalresponse, str):
-            self.send_message(room_id, finalresponse)
-        elif isinstance(finalresponse, GeneratorType):
-            for response in finalresponse:
-                self.send_message(room_id, response)
-
     def remove_help(self):
         """Removes the help command from the bot
 
-        This will remove the help command even if it has been overridden.
+        This will remove the help command even if it has been overridden using
+        ``@SparkBot.command("help")``
+
+        .. note::
+
+            When using the default receiver, commands may not be added or removed from the bot after
+            the receiver starts.
         """
 
         self.command_not_found_message = "Command not found."
         self.commands.pop("help", None)
 
-    def execute_command(self, command_str, **kwargs):
+    def execute_command(self, command_str, suppress_exceptions=True, **kwargs):
         """Runs the command given by 'command_str' if it exists with the possible arguments in ``**kwargs``.
 
-        Note that execute_command is "dumb". It does not enforce the return type of a command
-        function. It will happily return anything that the bot writer's command does. Contrast to
-        :meth:`command_dispatcher` which checks whether a command (executed by this function)
-        returns either a Generator or a str.
+        Execute_command will return either a str or a generator, depending on the behavior of the
+        command it calls. The receiver dispatch function calling it should be prepared for either
+        possibility.
 
         :param command_str: The 'command' that the user wants to run. Should match a command string
                             that has previously been added to the bot.
@@ -316,7 +260,7 @@ class SparkBot:
             if parameter not in possible_parameters:
                 if self._logger:
                     self._logger.warn(("Parameter ", parameter, " requested by function ",
-                                       command_str, " but not found internally. None will be ",
+                                       command_str, " but not found internally. `None` will be ",
                                        "passed to this parameter. Check the Writing Commands ",
                                        "document for a list of supported keywords."))
                     possible_parameters[parameter] = None
@@ -326,44 +270,27 @@ class SparkBot:
             if parameter in list(function_parameters.keys()):
                 parameters_to_pass[parameter] = value
 
-        # Only create the callback function if it's needed
-        if "callback" in parameters_to_pass:
-            parameters_to_pass["callback"] = self.create_callback(self.send_message, kwargs["room_id"])
+        # Catch generic Exception so that we always reply to the user.
+        try:
+            usercommandresponse = command_to_run(**parameters_to_pass)
+        except Exception as error:
 
-        return command_to_run(**parameters_to_pass)
+            # Build our logging string
+            if isinstance(self._logger, Logger):
+                self._logger.exception(' '.join(['User caused:', type(error).__name__,
+                                                error.args[0], 'with the command:', command_str]))
+            try:
+                errordescription = error.args[1]
+            except IndexError:
+                errordescription = ("Something happened internally. "
+                                    "For more information, contact the bot author.")
+            # Make response
+            finalresponse = " ".join(["⚠️ Error:", errordescription])
 
-    def send_message(self, spark_room, markdown):
-        """Sends a message to a Teams room.
+        else:
+            finalresponse = usercommandresponse
 
-        :param markdown: Markdown formatted string to send
-
-        :param spark_room: The room that we should send this response to,
-                           either CiscoSparkAPI.Room or str containing the room ID
-
-        """
-        if not markdown or not isinstance(markdown, str):
-            raise ValueError("response must be a non-blank string.")
-
-        if isinstance(spark_room, Room):
-            self.spark_api.messages.create(spark_room.id, markdown=markdown)
-        if isinstance(spark_room, str):
-            self.spark_api.messages.create(spark_room, markdown=markdown)
-
-    def create_callback(self, respond, room_id):
-        """ Pre-fills room ID in the function given by ``respond``
-
-        Adds the room ID as the first argument of the function given in ``respond``, simplifying the
-        'callback' experience for bot developers.
-
-        :param respond: The method to add the room ID to
-
-        :param room_id: The ID of the room to preset in ``respond``
-        """
-
-        callback = functools.partial(respond, room_id)
-        callback.__doc__ = ("SparkBot.respond method with room_id pre-filled, call this with ",
-                            "the message you would like to reply inside the called room with.")
-        return callback
+        return finalresponse
 
     def my_help(self, commandline):
         """
