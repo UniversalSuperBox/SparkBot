@@ -86,6 +86,9 @@ def create(bot, teams_api):
     :param bot: :class:`sparkbot.SparkBot` instance for this API instance to use
     """
 
+    if not isinstance(teams_api, CiscoSparkAPI):
+        raise TypeError("spark_api is not of type ciscosparkapi.CiscoSparkAPI")
+
     api = falcon.API()
     api_behavior = ReceiverResource(bot, teams_api)
     api.add_route("/sparkbot", api_behavior)

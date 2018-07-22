@@ -55,12 +55,7 @@ class SparkBot:
     :type skip_receiver_setup: "all", "webhook"
     """
 
-    def __init__(self, spark_api, root_url=None, logger=None, skip_receiver_setup=None):
-
-        if isinstance(spark_api, CiscoSparkAPI):
-            self.spark_api = spark_api
-        else:
-            raise TypeError("spark_api is not of type ciscosparkapi.CiscoSparkAPI")
+    def __init__(self, platform, root_url=None, logger=None, *args, **kwargs):
 
         if isinstance(logger, Logger):
             self._logger = logger
@@ -76,9 +71,6 @@ class SparkBot:
 
         # Message sent to user when they request a command that doesn't exist.
         self.command_not_found_message = "Command not found. Maybe try 'help'?"
-
-        # Cache "me" to speed up commands requiring it
-        self.me = self.spark_api.people.me()
 
         # The output of the "help all" command should only need to be determined once.
         # See self.my_help_all to learn more.
