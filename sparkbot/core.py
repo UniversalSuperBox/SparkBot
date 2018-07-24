@@ -55,7 +55,7 @@ class SparkBot:
     :type skip_receiver_setup: "all", "webhook"
     """
 
-    def __init__(self, platform, root_url=None, logger=None, *args, **kwargs):
+    def __init__(self, platform, root_url=None, logger=None, skip_receiver_setup=None, **kwargs):
 
         if isinstance(logger, Logger):
             self._logger = logger
