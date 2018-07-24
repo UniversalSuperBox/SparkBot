@@ -14,6 +14,7 @@ from ast import literal_eval
 from requests.exceptions import ConnectionError
 from ciscosparkapi import CiscoSparkAPI
 import falcon
+import falcon.testing as falcon_testing
 
 class TestAPI:
 
@@ -350,6 +351,35 @@ class TestAPI:
 
         assert isinstance(bot.receiver, falcon.API)
         assert not spark_api.webhooks.list.called
+
+    def test_custom_receiver_resources(self, emulator_server):
+        """Tests that custom resources are added to the Falcon.API receiver"""
+
+        class QuickResource:
+            def on_get(self, req, resp):
+                resp.status = falcon.HTTP_204
+                return
+
+        class SecondQuickResource:
+            def on_get(self, req, resp):
+                resp.status = falcon.HTTP_203
+                return
+
+        spark_api = self.get_spark_api(emulator_server)
+        custom_resource_1 = QuickResource()
+        custom_resource_2 = SecondQuickResource()
+        bot = SparkBot(spark_api, custom_receiver_resources={
+            "/one": custom_resource_1,
+            "/two": custom_resource_2
+        })
+
+        test_client = falcon_testing.TestClient(bot.receiver)
+
+        response1 = test_client.simulate_get("/one")
+        response2 = test_client.simulate_get("/two")
+
+        assert response1.status_code == 204
+        assert response2.status_code == 203
 
     def test_full_arg_passing(self, full_bot_setup):
         """Tests that arguments are passed to commands as expected (now with the emulator).

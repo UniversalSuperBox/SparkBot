@@ -53,9 +53,18 @@ class SparkBot:
                                 webhook. "webhook" creates a receiver but does not register a
                                 webhook with Webex Teams.
     :type skip_receiver_setup: "all", "webhook"
+
+    :param custom_receiver_resources: dict containing custom resources for the receiver.
+                                      Pass a dict of `Falcon resource(s)`_ with the endpoint you
+                                      would like them hosted at as the key. For example,
+                                      ``{"/my_endpoint": EndpointResource}`` will serve
+                                      EndpointResource at ``/my_endpoint``.
+
+    .. _falcon resource(s): https://falcon.readthedocs.io/en/stable/user/tutorial.html#creating-resources
     """
 
-    def __init__(self, spark_api, root_url=None, logger=None, skip_receiver_setup=None):
+    def __init__(self, spark_api, root_url=None, logger=None,
+                 skip_receiver_setup=None, custom_receiver_resources={}):
 
         if isinstance(spark_api, CiscoSparkAPI):
             self.spark_api = spark_api
@@ -90,7 +99,7 @@ class SparkBot:
         # Put any logic that "sets up" a receiver but not a webhook after this point
 
         # Create my receiver
-        self.receiver = receiver.create(self)
+        self.receiver = receiver.create(self, **custom_receiver_resources)
 
         if skip_receiver_setup == "webhook":
             self.webhook_secret = None

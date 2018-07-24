@@ -73,17 +73,28 @@ class ReceiverResource(object):
 
         return
 
-def create(bot):
+def create(bot, **kwargs):
     """Creates a falcon.API instance with the required behavior for a SparkBot receiver.
 
     Currently the API webhook path is hard-coded to ``/sparkbot``
 
     :param bot: :class:`sparkbot.SparkBot` instance for this API instance to use
+
+    :Keyword Arguments:
+        Additional arguments may be used to specify more resources that should be exposed
+        by the SparkBot receiver. For example, ``"/my_webhook"=[Falcon resource]`` will
+        expose your Falcon resource at ``/my_webhook`` on the server.
     """
 
     api = falcon.API()
     api_behavior = ReceiverResource(bot)
     api.add_route("/sparkbot", api_behavior)
+
+    for url, resource in kwargs.items():
+        if url == "/sparkbot":
+            raise ValueError("Cannot add resource to receiver with /sparkbot URL")
+
+        api.add_route(url, resource)
 
     return api
 
