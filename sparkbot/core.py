@@ -396,7 +396,7 @@ class SparkBot:
             return self.my_help_all()
 
         try:
-            help_text_raw = self.commands[command_to_help].function.__doc__
+            help_text_raw = self.commands[command_to_help].__doc__
             help_text = textwrap.dedent(help_text_raw)
         except KeyError:
             # The requested command doesn't exist
