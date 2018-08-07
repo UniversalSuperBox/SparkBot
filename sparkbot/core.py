@@ -209,9 +209,12 @@ class SparkBot:
         message = self.spark_api.messages.get(user_request.data.id)
         person = self.spark_api.people.get(message.personId)
 
+        # Convert "smart quotes" to "straight quotes"
+        commandline_interim = message.text.replace(u"\u2018", "'").replace(u"\u2019", "'").replace(u"\u201c",'"').replace(u"\u201d", '"')
+
         # Catch any errors in the shlex string
         try:
-            commandline = shlex.split(message.text)
+            commandline = shlex.split(commandline_interim)
         except ValueError as error:
             # Something is incorrect in the user's command string
             if isinstance(self._logger, Logger):
